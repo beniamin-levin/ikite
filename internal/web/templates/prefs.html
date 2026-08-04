@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ikite — Preferences</title>
+  {{template "head_common" .}}
+  <style>
+    .prefs-section { margin-bottom: 24px; }
+    .prefs-section h2 {
+      margin: 0 0 8px;
+      font-size: 1rem;
+      font-weight: 600;
+    }
+    .prefs-hint { font-size: 0.85rem; color: var(--muted); margin: 0 0 10px; }
+    table.collect-spots { border-collapse: collapse; width: 100%; max-width: 640px; background: #fff; }
+    table.collect-spots th, table.collect-spots td {
+      border: 1px solid var(--line); padding: 8px 10px; text-align: left;
+    }
+    table.collect-spots th { background: #f5f7fa; font-size: 0.8rem; }
+    table.collect-spots td.center { text-align: center; }
+    table.collect-spots tr.dragging { opacity: 0.5; }
+    table.collect-spots tr.drag-over td { border-top: 2px solid var(--accent); }
+    .drag-handle { cursor: grab; user-select: none; color: var(--muted); }
+    .prefs-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin-top: 8px; }
+    .prefs-row label { display: block; font-size: 0.8rem; color: var(--muted); margin-bottom: 4px; }
+    .prefs-row input, .prefs-row select, .prefs-row button {
+      padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; font: inherit;
+    }
+    .prefs-row button.primary { background: var(--accent); color: #fff; border-color: var(--accent); cursor: pointer; }
+    .prefs-row button.secondary { background: #fff; cursor: pointer; }
+    .status { font-size: 0.85rem; margin-top: 8px; }
+    .status.ok { color: #0a7a0a; }
+    .status.err { color: #c00; }
+    .live-preview {
+      margin-top: 10px; padding: 10px 12px; background: #f5f7fa;
+      border: 1px solid var(--line); border-radius: 8px; font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  {{template "nav" .}}
+  <main class="page">
+    <h1>Preferences</h1>
+    <p class="muted">Saved in your browser (localStorage). Notifications work while an ikite tab is open.</p>
+
+    <section class="prefs-section">
+      <h2>Save to DB spots</h2>
+      <p class="prefs-hint">Spots collected into the database (from server settings). Drag or use arrows to set your order. Uncheck Display to hide a spot on the wind table.</p>
+      <table class="collect-spots">
+        <thead>
+          <tr>
+            <th style="width:40px"></th>
+            <th>Spot</th>
+            <th style="width:70px">Display</th>
+            <th style="width:90px">Order</th>
+          </tr>
+        </thead>
+        <tbody id="collect-body"></tbody>
+      </table>
+      <p id="collect-status" class="status"></p>
+    </section>
+
+    <section class="prefs-section">
+      <h2>Browser notifications</h2>
+      <p class="prefs-hint">Message format: left gust | center wind–gust | right gust. Only the center spot triggers alerts.</p>
+      <div class="prefs-row">
+        <div>
+          <label for="notif-enabled">Notifications</label>
+          <select id="notif-enabled">
+            <option value="0">Off</option>
+            <option value="1">On</option>
+          </select>
+        </div>
+        <div>
+          <label for="notif-threshold">Threshold (kt)</label>
+          <input id="notif-threshold" type="number" min="1" max="50" step="1" value="10" />
+        </div>
+        <div>
+          <label for="notif-interval">Interval (min)</label>
+          <input id="notif-interval" type="number" min="1" max="60" step="1" value="5" />
+        </div>
+      </div>
+      <div class="prefs-row" style="margin-top:12px">
+        <div>
+          <label for="spot-left">Left (display)</label>
+          <select id="spot-left"></select>
+        </div>
+        <div>
+          <label for="spot-center">Center (alerts)</label>
+          <select id="spot-center"></select>
+        </div>
+        <div>
+          <label for="spot-right">Right (display)</label>
+          <select id="spot-right"></select>
+        </div>
+      </div>
+      <div class="prefs-row" style="margin-top:12px">
+        <button type="button" class="secondary" id="btn-permission">Allow notifications</button>
+        <button type="button" class="secondary" id="btn-test">Test notification</button>
+        <button type="button" class="primary" id="btn-save">Save preferences</button>
+      </div>
+      <p id="notif-permission" class="prefs-hint" style="margin-top:8px"></p>
+      <p id="notif-status" class="status"></p>
+      <div id="live-preview" class="live-preview" hidden></div>
+    </section>
+  </main>
+
+  <script src="/static/prefs-layout.js"></script>
+  <script>
+    (function () {
+      var STORAGE_KEY = IkitePrefs.STORAGE_KEY;
+      var collectSpots = [];
+
+      function loadPrefs() {
+        try {
+          var raw = localStorage.getItem(STORAGE_KEY);
+          return raw ? JSON.parse(raw) : {};
+        } catch (e) {
+          return {};
+        }
+      }
+
+      function savePrefs(prefs) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
+      }
+
+      function defaultPrefs(spots) {
+        var keys = spots.map(function (s) { return s.key; });
+        var layout = IkitePrefs.serverLayout(spots);
+        return {
+          collectOrder: layout.order.slice(),
+          collectVisible: layout.visible,
+          notifications: {
+            enabled: false,
+            threshold: 10,
+            intervalMin: 5,
+            spotLeft: keys.indexOf('15233') >= 0 ? '15233' : (keys[0] || 'ky'),
+            spotCenter: keys.indexOf('ky') >= 0 ? 'ky' : (keys[0] || 'ky'),
+            spotRight: keys.indexOf('bg') >= 0 ? 'bg' : (keys[keys.length - 1] || 'ky'),
+            alertStartHour: 8,
+            alertEndHour: 17
+          }
+        };
+      }
+
+      function mergePrefs(spots) {
+        var prefs = IkitePrefs.mergeCollectLayout(spots, { saveOnMigrate: true });
+        var def = defaultPrefs(spots);
+        if (!prefs.notifications) prefs.notifications = def.notifications;
+        else if (typeof prefs.notifications !== 'object') prefs.notifications = def.notifications;
+        prefs.notifications.threshold = prefs.notifications.threshold || 10;
+        prefs.notifications.intervalMin = prefs.notifications.intervalMin || 5;
+        if (!prefs.notifications.spotLeft) prefs.notifications.spotLeft = def.notifications.spotLeft;
+        if (!prefs.notifications.spotCenter) prefs.notifications.spotCenter = def.notifications.spotCenter;
+        if (!prefs.notifications.spotRight) prefs.notifications.spotRight = def.notifications.spotRight;
+        return prefs;
+      }
+
+      function spotByKey(key) {
+        for (var i = 0; i < collectSpots.length; i++) {
+          if (collectSpots[i].key === key) return collectSpots[i];
+        }
+        return null;
+      }
+
+      function renderCollectTable(order, visible) {
+        var tbody = document.getElementById('collect-body');
+        tbody.innerHTML = '';
+        order.forEach(function (key) {
+          var sp = spotByKey(key);
+          if (!sp) return;
+          var tr = document.createElement('tr');
+          tr.dataset.key = key;
+          tr.draggable = true;
+          var checked = visible[key] !== false;
+          tr.innerHTML =
+            '<td class="drag-handle center" title="Drag to reorder">⋮⋮</td>' +
+            '<td>' + escapeHtml(sp.name) + ' <small>(' + escapeHtml(key) + ')</small></td>' +
+            '<td class="center"><input type="checkbox" class="spot-display" data-key="' + escapeHtml(key) + '"' +
+            (checked ? ' checked' : '') + ' title="Show on wind table" /></td>' +
+            '<td class="center">' +
+            '<button type="button" class="move-up" title="Move up">↑</button> ' +
+            '<button type="button" class="move-down" title="Move down">↓</button>' +
+            '</td>';
+          tbody.appendChild(tr);
+        });
+      }
+
+      function escapeHtml(s) {
+        var el = document.createElement('span');
+        el.textContent = s;
+        return el.innerHTML;
+      }
+
+      function fillSpotSelects(prefs) {
+        if (!prefs.notifications) return;
+        var selects = ['spot-left', 'spot-center', 'spot-right'];
+        var fields = ['spotLeft', 'spotCenter', 'spotRight'];
+        selects.forEach(function (id, i) {
+          var sel = document.getElementById(id);
+          sel.innerHTML = '';
+          collectSpots.forEach(function (sp) {
+            var opt = document.createElement('option');
+            opt.value = sp.key;
+            opt.textContent = sp.name + ' (' + sp.key + ')';
+            sel.appendChild(opt);
+          });
+          sel.value = prefs.notifications[fields[i]] || '';
+        });
+      }
+
+      function readForm(prefs) {
+        if (!prefs.notifications || typeof prefs.notifications !== 'object') {
+          prefs.notifications = defaultPrefs(collectSpots).notifications;
+        }
+        prefs.notifications.enabled = document.getElementById('notif-enabled').value === '1';
+        prefs.notifications.threshold = parseInt(document.getElementById('notif-threshold').value, 10) || 10;
+        prefs.notifications.intervalMin = parseInt(document.getElementById('notif-interval').value, 10) || 5;
+        prefs.notifications.spotLeft = document.getElementById('spot-left').value;
+        prefs.notifications.spotCenter = document.getElementById('spot-center').value;
+        prefs.notifications.spotRight = document.getElementById('spot-right').value;
+        return prefs;
+      }
+
+      function applyForm(prefs) {
+        if (!prefs.notifications) return;
+        document.getElementById('notif-enabled').value = prefs.notifications.enabled ? '1' : '0';
+        document.getElementById('notif-threshold').value = prefs.notifications.threshold;
+        document.getElementById('notif-interval').value = prefs.notifications.intervalMin;
+        fillSpotSelects(prefs);
+      }
+
+      function setStatus(el, text, ok) {
+        el.textContent = text;
+        el.className = 'status ' + (ok ? 'ok' : 'err');
+      }
+
+      function updatePermissionStatus() {
+        var el = document.getElementById('notif-permission');
+        if (!el) return;
+        if (typeof Notification === 'undefined') {
+          el.textContent = 'This browser does not support notifications.';
+          return;
+        }
+        var p = Notification.permission;
+        if (p === 'granted') {
+          el.textContent = 'Notifications allowed.';
+          el.style.color = '#0a7a0a';
+        } else if (p === 'denied') {
+          el.textContent = 'Notifications blocked. Open browser site settings for ikite.fyi and allow notifications, then reload this page.';
+          el.style.color = '#c00';
+        } else {
+          el.textContent = 'Notifications not allowed yet. Click “Allow notifications” or “Test notification” — your browser should show a permission popup.';
+          el.style.color = 'var(--muted)';
+        }
+      }
+
+      function ensureNotificationPermission() {
+        if (typeof Notification === 'undefined') {
+          return Promise.resolve('unsupported');
+        }
+        if (Notification.permission === 'granted') {
+          return Promise.resolve('granted');
+        }
+        if (Notification.permission === 'denied') {
+          return Promise.resolve('denied');
+        }
+        return Notification.requestPermission();
+      }
+
+      function sendTestNotification() {
+        var prefs = readForm(mergePrefs(collectSpots));
+        var spots = [prefs.notifications.spotLeft, prefs.notifications.spotCenter, prefs.notifications.spotRight]
+          .filter(function (s) { return s; }).join(',');
+        return fetch('/api/wind/live?spots=' + encodeURIComponent(spots))
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            var n = prefs.notifications;
+            var left = data.spots[n.spotLeft];
+            var center = data.spots[n.spotCenter];
+            var right = data.spots[n.spotRight];
+            var fmtSide = function (s) { return s && s.gust > 0 ? Math.round(s.gust) : '0'; };
+            var fmtCenter = function (s) {
+              return s ? Math.round(s.wind) + ' - ' + Math.round(s.gust) : '0';
+            };
+            var body = fmtSide(left) + ' | ' + fmtCenter(center) + ' | ' + fmtSide(right);
+            new Notification('ikite test', { body: body, tag: 'ikite-wind-test' });
+            setStatus(document.getElementById('notif-status'), 'Test sent', true);
+          });
+      }
+
+      function updateLivePreview() {
+        if (!collectSpots.length) return;
+        var prefs = readForm(mergePrefs(collectSpots));
+        var spots = [prefs.notifications.spotLeft, prefs.notifications.spotCenter, prefs.notifications.spotRight]
+          .filter(function (s) { return s; }).join(',');
+        if (!spots) return;
+        fetch('/api/wind/live?spots=' + encodeURIComponent(spots))
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (data) {
+            if (!data || !data.spots) return;
+            var n = prefs.notifications;
+            var left = data.spots[n.spotLeft];
+            var center = data.spots[n.spotCenter];
+            var right = data.spots[n.spotRight];
+            var fmtSide = function (s) { return s && s.gust > 0 ? Math.round(s.gust) : '0'; };
+            var fmtCenter = function (s) {
+              return s ? Math.round(s.wind) + ' - ' + Math.round(s.gust) : '0';
+            };
+            var el = document.getElementById('live-preview');
+            el.textContent = 'Now: ' + fmtSide(left) + ' | ' + fmtCenter(center) + ' | ' + fmtSide(right);
+            el.hidden = false;
+          });
+      }
+
+      function bindReorder() {
+        var tbody = document.getElementById('collect-body');
+        var dragKey = null;
+
+        tbody.addEventListener('click', function (e) {
+          var row = e.target.closest('tr[data-key]');
+          if (!row) return;
+          if (e.target.classList.contains('spot-display')) {
+            persistCollectPrefs();
+            return;
+          }
+          if (e.target.classList.contains('move-up')) {
+            var prev = row.previousElementSibling;
+            if (prev) tbody.insertBefore(row, prev);
+            persistOrder();
+          } else if (e.target.classList.contains('move-down')) {
+            var next = row.nextElementSibling;
+            if (next) tbody.insertBefore(next, row);
+            persistOrder();
+          }
+        });
+
+        tbody.addEventListener('dragstart', function (e) {
+          if (e.target.classList.contains('spot-display')) {
+            e.preventDefault();
+            return;
+          }
+          var row = e.target.closest('tr[data-key]');
+          if (!row) return;
+          dragKey = row.dataset.key;
+          row.classList.add('dragging');
+        });
+        tbody.addEventListener('dragend', function (e) {
+          var row = e.target.closest('tr[data-key]');
+          if (row) row.classList.remove('dragging');
+          tbody.querySelectorAll('.drag-over').forEach(function (r) { r.classList.remove('drag-over'); });
+          dragKey = null;
+          persistCollectPrefs();
+        });
+        tbody.addEventListener('dragover', function (e) {
+          e.preventDefault();
+          var row = e.target.closest('tr[data-key]');
+          if (!row || row.dataset.key === dragKey) return;
+          tbody.querySelectorAll('.drag-over').forEach(function (r) { r.classList.remove('drag-over'); });
+          row.classList.add('drag-over');
+        });
+        tbody.addEventListener('drop', function (e) {
+          e.preventDefault();
+          var row = e.target.closest('tr[data-key]');
+          if (!row || !dragKey) return;
+          var dragRow = tbody.querySelector('tr[data-key="' + dragKey + '"]');
+          if (dragRow && dragRow !== row) tbody.insertBefore(dragRow, row);
+        });
+      }
+
+      function persistCollectPrefs() {
+        var prefs = IkitePrefs.loadPrefs() || {};
+        var order = [];
+        var visible = prefs.collectVisible || {};
+        document.querySelectorAll('#collect-body tr[data-key]').forEach(function (row) {
+          var key = row.dataset.key;
+          order.push(key);
+          var cb = row.querySelector('.spot-display');
+          visible[key] = cb ? cb.checked : true;
+        });
+        prefs.collectOrder = order;
+        prefs.collectVisible = visible;
+        prefs.prefsVersion = IkitePrefs.PREFS_VERSION;
+        IkitePrefs.savePrefs(prefs);
+        setStatus(document.getElementById('collect-status'), 'Saved', true);
+        setTimeout(function () {
+          var el = document.getElementById('collect-status');
+          if (el.textContent === 'Saved') el.textContent = '';
+        }, 1200);
+      }
+
+      function persistOrder() {
+        persistCollectPrefs();
+      }
+
+      document.getElementById('btn-save').addEventListener('click', function () {
+        var prefs = readForm(mergePrefs(collectSpots));
+        var statusEl = document.getElementById('notif-status');
+        function doSave() {
+          prefs.prefsVersion = IkitePrefs.PREFS_VERSION;
+          IkitePrefs.savePrefs(prefs);
+          setStatus(statusEl, 'Saved', true);
+          updateLivePreview();
+          updatePermissionStatus();
+          setTimeout(function () { location.reload(); }, 600);
+        }
+        if (prefs.notifications.enabled) {
+          ensureNotificationPermission().then(function (p) {
+            updatePermissionStatus();
+            if (p !== 'granted') {
+              setStatus(statusEl, 'Saved settings, but notifications are not allowed (' + p + ')', false);
+              prefs.prefsVersion = IkitePrefs.PREFS_VERSION;
+              IkitePrefs.savePrefs(prefs);
+              updateLivePreview();
+              return;
+            }
+            doSave();
+          });
+        } else {
+          doSave();
+        }
+      });
+
+      document.getElementById('btn-permission').addEventListener('click', function () {
+        var statusEl = document.getElementById('notif-status');
+        if (typeof Notification === 'undefined') {
+          setStatus(statusEl, 'Notifications not supported in this browser', false);
+          return;
+        }
+        if (Notification.permission === 'denied') {
+          updatePermissionStatus();
+          setStatus(statusEl, 'Blocked in browser — change site settings for ikite.fyi', false);
+          return;
+        }
+        ensureNotificationPermission().then(function (p) {
+          updatePermissionStatus();
+          if (p === 'granted') {
+            setStatus(statusEl, 'Notifications allowed', true);
+          } else if (p === 'denied') {
+            setStatus(statusEl, 'Permission denied — enable in browser site settings', false);
+          } else {
+            setStatus(statusEl, 'Permission: ' + p, false);
+          }
+        });
+      });
+
+      document.getElementById('btn-test').addEventListener('click', function () {
+        var statusEl = document.getElementById('notif-status');
+        if (typeof Notification === 'undefined') {
+          setStatus(statusEl, 'Notifications not supported', false);
+          return;
+        }
+        ensureNotificationPermission().then(function (p) {
+          updatePermissionStatus();
+          if (p !== 'granted') {
+            if (p === 'denied') {
+              setStatus(statusEl, 'Blocked — allow notifications for ikite.fyi in browser settings', false);
+            } else {
+              setStatus(statusEl, 'Permission not granted (' + p + ')', false);
+            }
+            return;
+          }
+          sendTestNotification().catch(function (e) {
+            setStatus(statusEl, e.message, false);
+          });
+        });
+      });
+
+      document.getElementById('notif-enabled').addEventListener('change', function () {
+        if (this.value !== '1') return;
+        ensureNotificationPermission().then(function () {
+          updatePermissionStatus();
+        });
+      });
+
+      updatePermissionStatus();
+
+      fetch('/api/spots/collect')
+        .then(function (r) {
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          return r.json();
+        })
+        .then(function (data) {
+          collectSpots = data.spots || [];
+          if (!collectSpots.length) {
+            setStatus(document.getElementById('collect-status'), 'No Save to DB spots configured on server', false);
+            return;
+          }
+          var prefs = mergePrefs(collectSpots);
+          renderCollectTable(prefs.collectOrder, prefs.collectVisible);
+          applyForm(prefs);
+          bindReorder();
+          updateLivePreview();
+        })
+        .catch(function (e) {
+          setStatus(document.getElementById('collect-status'), 'Failed to load spots: ' + e.message, false);
+        });
+    })();
+  </script>
+</body>
+</html>

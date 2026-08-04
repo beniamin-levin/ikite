@@ -3,21 +3,16 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Wind Graph</title>
+  <title>ikite — Wind Graph</title>
+  {{template "head_common" .}}
   <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
-  <style>
-    nav a { margin-right: 12px; }
-  </style>
 </head>
 <body>
-  <nav>
-    <a href="/">Table</a>
-    <a href="/graph">Graph</a>
-    <a href="/graph?p=day">Day</a>
-    <a href="/graph?p=week">Week</a>
-    <a href="/camera">Camera</a>
-  </nav>
-  <div id="chart"></div>
+  {{template "nav" .}}
+  <main class="page">
+    <h1>Wind graph</h1>
+    <div class="card" id="chart"></div>
+  </main>
   <script id="graph-data" type="application/json">
   {"series":{
   {{$first := true}}{{range $loc, $pts := .Series}}{{if not $first}},{{end}}{{$first = false}}
@@ -32,21 +27,16 @@
       chart: {
         type: 'area',
         stacked: false,
-        height: 350,
+        height: 420,
         zoom: { type: 'x', enabled: true, autoScaleYaxis: true },
         toolbar: { autoSelected: 'zoom' }
       },
       dataLabels: { enabled: false },
       markers: { size: 0 },
-      yaxis: {
-        labels: { formatter: (val) => val },
-        title: { text: 'Wind Speed' }
-      },
+      fill: { type: 'gradient', gradient: { shadeIntensity: 1, inverseColors: false, opacityFrom: 0.45, opacityTo: 0.05 } },
+      yaxis: { title: { text: 'Wind (kt)' }, labels: { formatter: v => Math.round(v) } },
       xaxis: { type: 'datetime' },
-      tooltip: {
-        shared: false,
-        y: { formatter: (val) => val }
-      }
+      tooltip: { shared: true, y: { formatter: v => (v == null ? '' : Math.round(v) + ' kt') } }
     };
     new ApexCharts(document.querySelector('#chart'), options).render();
   </script>

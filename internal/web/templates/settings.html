@@ -3,32 +3,26 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Wind Alert Settings</title>
+  <title>ikite — Settings</title>
+  {{template "head_common" .}}
   <style>
     input, button { padding: 8px; margin: 4px; }
-    nav a { margin-right: 12px; }
-    table.spots { border-collapse: collapse; margin: 16px 0; }
+    table.spots { border-collapse: collapse; margin: 16px 0; width: 100%; background: #fff; }
     table.spots th, table.spots td { border: 1px solid #ccc; padding: 8px 12px; text-align: left; }
     table.spots th { background: #f5f5f5; }
     table.spots td.center { text-align: center; }
-    table.spots tr.dragging { opacity: 0.5; }
-    table.spots tr.drag-over td { border-top: 2px solid #333; }
-    .drag-handle { cursor: grab; user-select: none; color: #666; padding: 0 8px; }
     .spot-status { margin-left: 8px; font-size: 12px; color: #666; }
     .spot-status.ok { color: #0a0; }
     .spot-status.err { color: #c00; }
-    .add-spot { margin: 16px 0 24px; padding: 12px; border: 1px solid #ddd; max-width: 480px; }
+    .add-spot { margin: 16px 0 24px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; max-width: 480px; background: #fff; }
     .add-spot label { display: block; margin-top: 8px; }
     table.spots select { padding: 4px; font-size: 13px; }
   </style>
 </head>
 <body>
-  <nav>
-    <a href="/">Table</a>
-    <a href="/graph">Graph</a>
-    <a href="/camera">Camera</a>
-  </nav>
-
+  {{template "nav" .}}
+  <main class="page">
+  <h1>Settings</h1>
   <p>Current threshold: {{.Threshold}}</p>
 
   <p style="margin-bottom: 24px;">
@@ -41,6 +35,34 @@
     <select id="prediction_telegram" name="prediction_telegram">
       <option value="yes"{{if eq .PredictionTelegram "yes"}} selected{{end}}>Yes</option>
       <option value="no"{{if eq .PredictionTelegram "no"}} selected{{end}}>No</option>
+    </select>
+    <br />
+    <label style="margin-top: 8px; display: inline-block;">Wind alert spots</label>
+    <span class="muted" style="margin-left: 8px; font-size: 12px;">message = left | middle | right; only middle triggers alerts</span>
+    <br />
+    <label for="alert_telegram_spot_left">Left</label>
+    <select id="alert_telegram_spot_left" name="alert_telegram_spot_left">
+      {{range $.Spots}}
+      <option value="{{.Key}}"{{if eq $.AlertTelegramSpotLeft .Key}} selected{{end}}>{{.Name}} ({{.Key}})</option>
+      {{end}}
+    </select>
+    <label for="alert_telegram_spot" style="margin-left: 12px;">Middle (alert)</label>
+    <select id="alert_telegram_spot" name="alert_telegram_spot">
+      {{range $.Spots}}
+      <option value="{{.Key}}"{{if eq $.AlertTelegramSpot .Key}} selected{{end}}>{{.Name}} ({{.Key}})</option>
+      {{end}}
+    </select>
+    <label for="alert_telegram_spot_right" style="margin-left: 12px;">Right</label>
+    <select id="alert_telegram_spot_right" name="alert_telegram_spot_right">
+      {{range $.Spots}}
+      <option value="{{.Key}}"{{if eq $.AlertTelegramSpotRight .Key}} selected{{end}}>{{.Name}} ({{.Key}})</option>
+      {{end}}
+    </select>
+    <label for="alert_telegram_interval" style="margin-left: 12px;">Interval</label>
+    <select id="alert_telegram_interval" name="alert_telegram_interval_min">
+      {{range $.AlertIntervals}}
+      <option value="{{.Value}}"{{if eq $.AlertTelegramInterval .Value}} selected{{end}}>{{.Label}}</option>
+      {{end}}
     </select>
     <br style="margin-top: 8px;" />
     <label for="forecast_start" style="margin-top: 8px; display: inline-block;">Forecast start</label>
@@ -59,7 +81,8 @@
   </p>
 
   <div style="margin-bottom: 24px;">
-    <h3>Index page spots <span id="spot-status" class="spot-status"></span></h3>
+    <h3>Spots <span id="spot-status" class="spot-status"></span></h3>
+    <p class="muted" style="font-size: 0.85rem; margin-bottom: 12px;">Wind table display and order are configured on the <a href="/prefs">Prefs</a> page.</p>
 
     <div class="add-spot">
       <strong>Add Windguru spot</strong>
@@ -76,10 +99,7 @@
     <table class="spots">
       <thead>
         <tr>
-          <th style="width:40px"></th>
           <th>Spot</th>
-          <th style="width:90px">Order</th>
-          <th>Display on index</th>
           <th>Save to DB</th>
           <th>Interval</th>
           <th>Start</th>
@@ -88,16 +108,8 @@
       </thead>
       <tbody id="spots-body">
         {{range $sp := .Spots}}
-        <tr data-key="{{$sp.Key}}" draggable="true">
-          <td class="drag-handle" title="Drag to reorder">⋮⋮</td>
+        <tr data-key="{{$sp.Key}}">
           <td>{{$sp.Name}} <small>({{$sp.Key}})</small></td>
-          <td class="center reorder-btns">
-            <button type="button" class="move-up" title="Move up">↑</button>
-            <button type="button" class="move-down" title="Move down">↓</button>
-          </td>
-          <td class="center">
-            <input type="checkbox" class="spot-visible" data-key="{{$sp.Key}}"{{if $sp.Visible}} checked{{end}} />
-          </td>
           <td class="center">
             <input type="checkbox" class="spot-collect" data-key="{{$sp.Key}}"{{if $sp.Collect}} checked{{end}} />
           </td>
@@ -128,7 +140,8 @@
     </table>
   </div>
 
-  <form method="post" action="/settings">
+  <form method="post" action="/settings?pass={{.Pass}}">
+    <input type="hidden" name="pass" value="{{.Pass}}" />
     {{range $i, $b := .Buttons}}
     <button class="wind_btn" name="threshold_btn" value="{{$b}}">{{$b}}</button>
     {{if eq (mod $b 4) 0}}<br/><br/>{{end}}
@@ -138,11 +151,22 @@
     <input name="threshold" value="10" type="number" style="width:60px" />
     <button class="wind_btn">Submit</button>
   </form>
+  </main>
 
   <script>
+    const settingsPass = {{.Pass}};
+    function withPass(path) {
+      if (!settingsPass) return path;
+      return path + (path.indexOf('?') >= 0 ? '&' : '?') + 'pass=' + encodeURIComponent(settingsPass);
+    }
+
     (function () {
       const forecastSelect = document.getElementById('forecast_telegram');
       const predictionSelect = document.getElementById('prediction_telegram');
+      const alertSpotLeftSelect = document.getElementById('alert_telegram_spot_left');
+      const alertSpotSelect = document.getElementById('alert_telegram_spot');
+      const alertSpotRightSelect = document.getElementById('alert_telegram_spot_right');
+      const alertIntervalSelect = document.getElementById('alert_telegram_interval');
       const forecastStart = document.getElementById('forecast_start');
       const forecastEnd = document.getElementById('forecast_end');
       const forecastStatus = document.getElementById('forecast-status');
@@ -161,11 +185,16 @@
         const body = new URLSearchParams({
           forecast_telegram: forecastSelect.value,
           prediction_telegram: predictionSelect.value,
+          alert_telegram_spot_left: alertSpotLeftSelect.value,
+          alert_telegram_spot: alertSpotSelect.value,
+          alert_telegram_spot_right: alertSpotRightSelect.value,
+          alert_telegram_interval_min: alertIntervalSelect.value,
           forecast_start_hour: forecastStart.value,
-          forecast_end_hour: forecastEnd.value
+          forecast_end_hour: forecastEnd.value,
+          pass: settingsPass
         });
         setForecastStatus('Saving…', true);
-        fetch('/settings/forecast', {
+        fetch(withPass('/settings/forecast'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
           body: body.toString()
@@ -179,6 +208,10 @@
 
       forecastSelect.addEventListener('change', saveForecast);
       predictionSelect.addEventListener('change', saveForecast);
+      alertSpotLeftSelect.addEventListener('change', saveForecast);
+      alertSpotSelect.addEventListener('change', saveForecast);
+      alertSpotRightSelect.addEventListener('change', saveForecast);
+      alertIntervalSelect.addEventListener('change', saveForecast);
       forecastStart.addEventListener('change', saveForecast);
       forecastEnd.addEventListener('change', saveForecast);
     })();
@@ -201,10 +234,10 @@
           setAddStatus('Enter station ID and name', false);
           return;
         }
-        const body = new URLSearchParams({ windguru_id: windguruId, name: name });
+        const body = new URLSearchParams({ windguru_id: windguruId, name: name, pass: settingsPass });
         addBtn.disabled = true;
         setAddStatus('Adding…', true);
-        fetch('/settings/spots/add', {
+        fetch(withPass('/settings/spots/add'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
           body: body.toString()
@@ -227,19 +260,12 @@
       const tbody = document.getElementById('spots-body');
       const status = document.getElementById('spot-status');
       let saveTimer = null;
-      let dragRow = null;
 
       function collectState() {
-        const order = [];
-        const visible = [];
         const collect = [];
         const schedules = {};
         tbody.querySelectorAll('tr[data-key]').forEach(function (row) {
           const key = row.dataset.key;
-          order.push(key);
-          if (row.querySelector('.spot-visible').checked) {
-            visible.push(key);
-          }
           if (row.querySelector('.spot-collect').checked) {
             collect.push(key);
           }
@@ -250,10 +276,9 @@
           };
         });
         return {
-          spot_order: order.join(','),
-          visible_spots: visible.join(','),
           collect_spots: collect.join(','),
-          spot_schedules: JSON.stringify(schedules)
+          spot_schedules: JSON.stringify(schedules),
+          pass: settingsPass
         };
       }
 
@@ -272,7 +297,7 @@
         saveTimer = setTimeout(function () {
           const body = new URLSearchParams(collectState());
           setStatus('Saving…', true);
-          fetch('/settings/spots', {
+          fetch(withPass('/settings/spots'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: body.toString()
@@ -286,66 +311,12 @@
       }
 
       tbody.addEventListener('change', function (e) {
-        if (e.target.classList.contains('spot-visible') ||
-            e.target.classList.contains('spot-collect') ||
+        if (e.target.classList.contains('spot-collect') ||
             e.target.classList.contains('spot-interval') ||
             e.target.classList.contains('spot-start') ||
             e.target.classList.contains('spot-end')) {
           saveSpots();
         }
-      });
-
-      tbody.addEventListener('click', function (e) {
-        const row = e.target.closest('tr[data-key]');
-        if (!row) return;
-        if (e.target.classList.contains('move-up')) {
-          const prev = row.previousElementSibling;
-          if (prev) tbody.insertBefore(row, prev);
-          saveSpots();
-        }
-        if (e.target.classList.contains('move-down')) {
-          const next = row.nextElementSibling;
-          if (next) tbody.insertBefore(next, row);
-          saveSpots();
-        }
-      });
-
-      tbody.addEventListener('dragstart', function (e) {
-        const row = e.target.closest('tr[data-key]');
-        if (!row || e.target.classList.contains('spot-visible') || e.target.classList.contains('spot-collect') ||
-            e.target.classList.contains('spot-interval') || e.target.classList.contains('spot-start') ||
-            e.target.classList.contains('spot-end') || e.target.tagName === 'SELECT') {
-          e.preventDefault();
-          return;
-        }
-        dragRow = row;
-        row.classList.add('dragging');
-        e.dataTransfer.effectAllowed = 'move';
-      });
-
-      tbody.addEventListener('dragend', function () {
-        if (dragRow) dragRow.classList.remove('dragging');
-        tbody.querySelectorAll('.drag-over').forEach(function (r) { r.classList.remove('drag-over'); });
-        dragRow = null;
-      });
-
-      tbody.addEventListener('dragover', function (e) {
-        e.preventDefault();
-        const row = e.target.closest('tr[data-key]');
-        if (!row || row === dragRow) return;
-        tbody.querySelectorAll('.drag-over').forEach(function (r) {
-          if (r !== row) r.classList.remove('drag-over');
-        });
-        row.classList.add('drag-over');
-      });
-
-      tbody.addEventListener('drop', function (e) {
-        e.preventDefault();
-        const row = e.target.closest('tr[data-key]');
-        if (!row || !dragRow || row === dragRow) return;
-        row.classList.remove('drag-over');
-        tbody.insertBefore(dragRow, row);
-        saveSpots();
       });
     })();
   </script>

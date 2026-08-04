@@ -9,6 +9,10 @@ server-keys/*
 !server-keys/README.md
 *.pem
 
+# Node (Playwright layout verification scripts)
+node_modules/
+package-lock.json
+
 # Build artifacts
 bin/
 *.exe
@@ -30,3 +34,6 @@ ikite_mysql/
 
 # Beget proxy with hardcoded secret (copy from proxy_post.php.example)
 deploy/beget/proxy_post.php
+
+# Legacy PHP site (contains DB credentials; reference only)
+php/

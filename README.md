@@ -12,6 +12,8 @@ Israeli Mediterranean wind monitoring for kitesurfing/windsurfing.
 - **Collector** — polls Windguru stations, Kiryat Yam history, Kiryat Haim (windometer), sends Telegram alerts
 - **Forecast job** — fetches Hebrew AI report from surfo, translates to English, stores + Telegram
 - **Windguru forecast job** — daily at 07:00, fetches all models for spots with `windguru_id` via Beget proxy
+- **openWRF forecast job** — daily at 08:00, parses Kiryat Yam / matched-spot 1 km PDFs from Google Drive (multi-day, overrides overlapping hours next day)
+- **Forecast page** (`/forecast`) — all stored models for spots checked visible in Settings
 
 ## Quick start
 
@@ -25,6 +27,7 @@ MIGRATE=1 ./bin/server        # http://localhost:8080
 ./bin/collector               # run every ~5 min via cron
 ./bin/forecast                # run every ~15–30 min via cron
 ./bin/wgforecast              # daily 07:00 — Windguru model forecasts (see deploy/install-wg-forecast-timer.sh)
+./bin/openwrf                 # daily 08:00 — openWRF Kiryat Yam forecast (see deploy/install-openwrf-forecast-timer.sh)
 ```
 
 ## Cron examples
@@ -50,6 +53,7 @@ Per-station Windguru timers (production): see `deploy/setup-wg-timers.sh` and `d
 | `BEGET_PROXY_SECRET` | Shared secret — must match `PROXY_SECRET` in uploaded `proxy_post.php` |
 | `KY_HISTORY_URL` | Upstream Surfo KY wind JSON (`api_wind.php`) |
 | `SURFO_LIVE_URL` | Upstream Surfo AI forecast JSON |
+| `OPENWRF_PDF_URL` | Optional override for the public openWRF Google Drive PDF |
 | `WG_TIMER_QUEUE_DIR` | Directory for pending timer requests (web writes, root cron processes) |
 | `WG_TIMER_SCRIPT` | Path to `deploy/add-wg-timer.sh` (used by queue processor) |
 
@@ -59,6 +63,7 @@ Per-station Windguru timers (production): see `deploy/setup-wg-timers.sh` and `d
 cmd/server      HTTP dashboard
 cmd/collector   wind poll + alerts
 cmd/wgforecast  Windguru forecast job (daily)
+cmd/openwrf     openWRF forecast job (daily)
 internal/       packages (store, sources, notify, web)
 migrations/     MySQL schema
 deploy/         systemd timers, PHP proxies, env template

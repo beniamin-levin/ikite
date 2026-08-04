@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ikite — Forecast</title>
+  {{template "head_common" .}}
+  <style>
+    .forecast-spot { margin-bottom: 28px; }
+    .forecast-spot h2 { margin: 0 0 8px; font-size: 1.1rem; }
+    .spot-picker {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin: 12px 0 18px;
+    }
+    .spot-picker a {
+      display: inline-block;
+      padding: 6px 10px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: #fff;
+      color: var(--ink);
+      font-size: 0.9rem;
+      font-weight: 600;
+      text-decoration: none;
+    }
+    .spot-picker a:hover { background: var(--accent-soft); color: var(--accent); text-decoration: none; }
+    .spot-picker a.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+    .table-wrap {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+    }
+    table.forecast {
+      border-collapse: collapse;
+      width: 100%;
+      background: #fff;
+      font-size: 12px;
+    }
+    table.forecast td, table.forecast th {
+      text-align: center;
+      padding: 4px 6px;
+      white-space: nowrap;
+      border: 1px solid #00000017;
+    }
+    table.forecast thead th {
+      background: #f5f7fa;
+      font-weight: 600;
+    }
+    .wind18 { background-color: #ffe100; }
+    .wind16 { background-color: #cbff00; }
+    .wind14 { background-color: rgba(11,254,0,1); }
+    .wind10 { background-color: rgba(82,249,192,1); }
+    .wind8 { background-color: rgba(157,250,246,1); }
+    .wind_arrow { width: 14px; height: 14px; vertical-align: middle; }
+    .empty { color: var(--muted); margin: 24px 0; }
+    table.forecast td.peak {
+      background: #e8f5e9;
+      border-color: #a5d6a7;
+      font-weight: 700;
+    }
+    @media only screen and (max-width: 700px) {
+      .page.page-wide { padding-left: 8px; padding-right: 8px; }
+      table.forecast { font-size: 11px; }
+      table.forecast td, table.forecast th { padding: 3px 4px; }
+    }
+  </style>
+</head>
+<body>
+  {{template "nav" .}}
+  <main class="page page-wide">
+    <h1>Forecast</h1>
+    <p class="muted">{{.Date}} · {{.SpotName}}</p>
+
+    <nav class="spot-picker" aria-label="Forecast spot">
+      {{range .SpotOptions}}
+      <a href="/forecast?spot={{.Key}}"{{if .Active}} class="active"{{end}}>{{.Name}}</a>
+      {{end}}
+    </nav>
+
+    {{if not .HasData}}
+    <p class="empty">No forecast data for {{.SpotName}} yet.</p>
+    {{else}}
+    <section class="forecast-spot">
+      <div class="table-wrap">
+        <table class="forecast">
+          <thead>
+            <tr>
+              <th></th>
+              {{range .Models}}
+              <th>{{.}}</th>
+              {{end}}
+            </tr>
+          </thead>
+          <tbody>
+            {{range .Rows}}
+            <tr>
+              <td{{if .Peak}} class="peak"{{end}}>{{.Time}}</td>
+              {{range .Cells}}
+                {{if .Empty}}
+                <td></td>
+                {{else}}
+                <td{{if .CSS}} class="{{.CSS}}"{{end}}>
+                  <svg class="wind_arrow" version="1.1" viewBox="0 0 100 100"><g transform="rotate({{.WindDir}},50,50) translate(0,5)"><path d="m50,0 -20,30 16,-3 -3,63 14,0 -3,-63 16,3 -20,-30z" fill="black" stroke-width="0"></path></g></svg>
+                  {{printf "%.0f" .Wind}}-{{printf "%.0f" .Gust}}
+                </td>
+                {{end}}
+              {{end}}
+            </tr>
+            {{end}}
+          </tbody>
+        </table>
+      </div>
+    </section>
+    {{end}}
+  </main>
+</body>
+</html>

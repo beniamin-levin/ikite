@@ -8,6 +8,7 @@ build:
 	go build -o bin/collector ./cmd/collector
 	go build -o bin/forecast ./cmd/forecast
 	go build -o bin/wgforecast ./cmd/wgforecast
+	go build -o bin/openwrf ./cmd/openwrf
 	go build -o bin/prediction ./cmd/prediction
 
 run-server:

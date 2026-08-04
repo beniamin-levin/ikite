@@ -174,6 +174,27 @@ func (s *Store) VisibleSpots() ([]string, error) {
 	return out, rows.Err()
 }
 
+// CollectSpots returns spots with Save to DB enabled, in display order.
+func (s *Store) CollectSpots() ([]models.Spot, error) {
+	rows, err := s.DB.Query(spotSelectSQL + `
+		WHERE collect = 1
+		ORDER BY sort_order, id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []models.Spot
+	for rows.Next() {
+		sp, err := scanSpot(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, sp)
+	}
+	return out, rows.Err()
+}
+
 func (s *Store) VisibleSpotSet() (map[string]bool, error) {
 	spots, err := s.ListSpots()
 	if err != nil {

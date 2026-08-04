@@ -1,0 +1,37 @@
+{{define "head_common"}}
+<link rel="icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAU0lEQVR42u3XPQoAIAhA4faO2lE7VE0tQfSjKch74Ch8i4Mpl9o8JwEAIFkeuQDmTAGrTAC7YgNO+wK4TRXwmgpAmgigFWcIAAAAAABiAXhMwgE6JQVe71R5lIgAAAAASUVORK5CYII=" type="image/png" sizes="32x32" />
+<link rel="icon" href="/static/favicon-32.png?v=4" type="image/png" sizes="32x32" />
+<link rel="icon" href="/static/favicon-16.png?v=4" type="image/png" sizes="16x16" />
+<link rel="icon" href="/favicon.ico?v=4" sizes="any" />
+<link rel="apple-touch-icon" href="/apple-touch-icon.png?v=4" sizes="180x180" />
+<link rel="stylesheet" href="/static/site.css?v=7" />
+<script src="/static/notifications.js?v=2" defer></script>
+{{end}}
+
+{{define "nav"}}
+<header class="site-header">
+  <div class="site-header-inner">
+    <a class="brand" href="/">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 100 100"><path d="m50,8 -22,30 18,-3 -3,57 14,0 -3,-57 18,3 z"/></svg>
+      </span>
+      <span>ikite</span>
+    </a>
+    <nav class="site-nav site-nav-row1" aria-label="Main">
+      <a href="/"{{if eq .Active "table"}} class="active"{{end}}>Table</a>
+      <a href="/graph"{{if eq .Active "graph"}} class="active"{{end}}>Graph</a>
+      <a href="/camera"{{if eq .Active "camera"}} class="active"{{end}}>Camera</a>
+      <a href="/prediction"{{if eq .Active "prediction"}} class="active"{{end}}>Prediction</a>
+      <a href="/forecast"{{if eq .Active "forecast"}} class="active"{{end}}>Forecast</a>
+    </nav>
+    <nav class="site-nav site-nav-row2" aria-label="Main navigation continued">
+      <a href="/spots/rating"{{if eq .Active "rating"}} class="active"{{end}}>Rating</a>
+      <a href="/spots/map"{{if eq .Active "map"}} class="active"{{end}}>Map</a>
+      <a href="/prefs"{{if eq .Active "prefs"}} class="active"{{end}}>Prefs</a>
+      <a href="/?p=day">Day</a>
+      <a href="/?p=week">Week</a>
+      <a href="/about"{{if eq .Active "about"}} class="active"{{end}}>About Me</a>
+    </nav>
+  </div>
+</header>
+{{end}}

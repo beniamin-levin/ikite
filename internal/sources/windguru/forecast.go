@@ -50,9 +50,26 @@ type forecastModelResp struct {
 	} `json:"fcst"`
 }
 
-// FetchSpotForecasts loads all model forecasts for a Windguru spot page id.
-// Only periods on forecastDate (calendar day in loc) are returned.
+// FetchSpotForecasts loads all available model forecasts for a Windguru spot.
+// Prefers micro.windguru.cz (all free models with clear names); falls back to JSON iapi.
 func (c *ForecastClient) FetchSpotForecasts(spotID int, forecastDate time.Time, loc *time.Location) ([]models.WindForecastRow, error) {
+	rows, err := c.FetchSpotForecastsMicro(spotID, forecastDate, loc)
+	if err == nil && len(rows) > 0 {
+		return rows, nil
+	}
+	microErr := err
+
+	rows, err = c.fetchSpotForecastsJSON(spotID, forecastDate, loc)
+	if err != nil {
+		if microErr != nil {
+			return nil, fmt.Errorf("micro: %v; json: %w", microErr, err)
+		}
+		return nil, err
+	}
+	return rows, nil
+}
+
+func (c *ForecastClient) fetchSpotForecastsJSON(spotID int, forecastDate time.Time, loc *time.Location) ([]models.WindForecastRow, error) {
 	spotBody, err := c.Proxy.Get(forecastSpotURL(spotID), wgHeaders(false))
 	if err != nil {
 		return nil, fmt.Errorf("forecast_spot %d: %w", spotID, err)
@@ -69,14 +86,28 @@ func (c *ForecastClient) FetchSpotForecasts(spotID int, forecastDate time.Time, 
 		return nil, fmt.Errorf("forecast_spot %d: no models", spotID)
 	}
 
-	tab := spot.Tabs[0]
-	var out []models.WindForecastRow
-	day := dateOnly(forecastDate.In(loc))
+	// Collect unique model runs across all tabs.
+	seen := map[int]bool{}
+	var runs []modelRun
+	for _, tab := range spot.Tabs {
+		for _, mr := range tab.IDModelArr {
+			if seen[mr.IDModel] {
+				continue
+			}
+			seen[mr.IDModel] = true
+			runs = append(runs, mr)
+		}
+	}
 
-	for _, mr := range tab.IDModelArr {
+	day := dateOnly(forecastDate.In(loc))
+	var out []models.WindForecastRow
+	for _, mr := range runs {
 		rows, err := c.fetchModel(spotID, mr, day, loc)
 		if err != nil {
 			return nil, err
+		}
+		for i := range rows {
+			rows[i].Model = DisplayModelName(rows[i].IDModel, rows[i].Model)
 		}
 		out = append(out, rows...)
 	}

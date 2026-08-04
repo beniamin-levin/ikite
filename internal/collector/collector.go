@@ -25,6 +25,9 @@ type Service struct {
 	Log      *slog.Logger
 }
 
+// alertReadingMaxAge is how fresh the selected alert-spot reading must be to allow Telegram alerts.
+const alertReadingMaxAge = 45 * time.Minute
+
 type Result struct {
 	WindKY     float64
 	WindKH     float64
@@ -33,6 +36,18 @@ type Result struct {
 	MsgBG      string
 	AlertSent  bool
 	SavedCount int
+}
+
+// alertReadingFresh reports whether the latest reading period is recent enough for alerts.
+func alertReadingFresh(now, latest time.Time) bool {
+	if latest.IsZero() {
+		return false
+	}
+	age := now.Sub(latest)
+	if age < 0 {
+		age = -age
+	}
+	return age <= alertReadingMaxAge
 }
 
 func (s *Service) shouldCollectSpot(sp models.Spot, now time.Time) (bool, string) {
@@ -155,20 +170,123 @@ func (s *Service) Run(now time.Time) (*Result, error) {
 		res.MsgKY = fmt.Sprintf("%.0f - %.0f", res.WindKH, res.WindKH)
 	}
 
-	shouldAlert := hour >= s.Cfg.AlertStartHour &&
-		hour <= s.Cfg.AlertEndHour &&
-		threshold != 999 &&
-		(res.WindKY >= threshold || res.WindKH >= threshold)
+	alertLeft, err := s.Store.AlertTelegramSpotLeft()
+	if err != nil {
+		return nil, fmt.Errorf("alert left spot: %w", err)
+	}
+	if _, err := s.Store.SpotByID(alertLeft); err != nil {
+		s.Log.Warn("alert left spot missing, falling back to 15233", "spot", alertLeft, "err", err)
+		alertLeft = "15233"
+	}
+	alertSpot, err := s.Store.AlertTelegramSpot()
+	if err != nil {
+		return nil, fmt.Errorf("alert spot: %w", err)
+	}
+	if _, err := s.Store.SpotByID(alertSpot); err != nil {
+		s.Log.Warn("alert spot missing, falling back to ky", "spot", alertSpot, "err", err)
+		alertSpot = "ky"
+	}
+	alertRight, err := s.Store.AlertTelegramSpotRight()
+	if err != nil {
+		return nil, fmt.Errorf("alert right spot: %w", err)
+	}
+	if _, err := s.Store.SpotByID(alertRight); err != nil {
+		s.Log.Warn("alert right spot missing, falling back to bg", "spot", alertRight, "err", err)
+		alertRight = "bg"
+	}
+	alertIntervalMin, err := s.Store.AlertTelegramIntervalMin()
+	if err != nil {
+		return nil, fmt.Errorf("alert interval: %w", err)
+	}
+	alertInterval := time.Duration(alertIntervalMin) * time.Minute
+
+	leftMsg := alertSideGust(s.Store, alertLeft, res.MsgNorth)
+	rightMsg := alertSideGust(s.Store, alertRight, res.MsgBG)
+
+	alertWind := res.WindKY
+	alertMsg := res.MsgKY
+	if alertSpot != "ky" {
+		wind, gust, err := s.Store.LatestWindGust(alertSpot)
+		if err != nil {
+			s.Log.Warn("latest alert spot wind", "spot", alertSpot, "err", err)
+		} else {
+			alertWind = wind
+			alertMsg = fmt.Sprintf("%.0f - %.0f", wind, gust)
+		}
+	} else if alertWind == 0 {
+		if w, err := s.Store.LatestWind("ky"); err == nil {
+			alertWind = w
+			res.WindKY = w
+		}
+	}
+	if alertMsg == "" {
+		alertMsg = fmt.Sprintf("%.0f", alertWind)
+	}
+
+	latestAlertPeriod, err := s.Store.LatestWindPeriod(alertSpot)
+	if err != nil {
+		s.Log.Warn("latest alert spot period", "spot", alertSpot, "err", err)
+	}
+	spotFresh := alertReadingFresh(now, latestAlertPeriod)
+
+	overThreshold := alertWind >= threshold
+	inAlertHours := hour >= s.Cfg.AlertStartHour && hour <= s.Cfg.AlertEndHour
+
+	lastAlert, err := s.Store.LastWindAlertAt()
+	if err != nil {
+		s.Log.Warn("last wind alert time", "err", err)
+	}
+	intervalOK := lastAlert.IsZero() || now.Sub(lastAlert) >= alertInterval
+
+	shouldAlert := inAlertHours && threshold != 999 && overThreshold && spotFresh && intervalOK
+
+	if inAlertHours && threshold != 999 && overThreshold && !spotFresh {
+		s.Log.Info("telegram alert skipped",
+			"reason", "alert spot data stuck or stale",
+			"spot", alertSpot,
+			"latest", latestAlertPeriod,
+			"max_age_min", int(alertReadingMaxAge.Minutes()),
+			"wind", alertWind,
+			"threshold", threshold,
+		)
+	} else if inAlertHours && threshold != 999 && overThreshold && spotFresh && !intervalOK {
+		s.Log.Info("telegram alert skipped",
+			"reason", "interval not elapsed",
+			"spot", alertSpot,
+			"interval_min", alertIntervalMin,
+			"last_alert", lastAlert,
+		)
+	}
 
 	if shouldAlert && s.Telegram.Enabled() {
-		msg := fmt.Sprintf("%s | %s | %s", res.MsgNorth, res.MsgKY, res.MsgBG)
+		msg := fmt.Sprintf("%s | %s | %s", leftMsg, alertMsg, rightMsg)
 		if err := s.Telegram.Send(msg); err != nil {
 			s.Log.Error("telegram alert failed", "err", err)
 		} else {
 			res.AlertSent = true
-			s.Log.Info("telegram alert sent", "msg", msg)
+			if err := s.Store.SetLastWindAlertAt(now); err != nil {
+				s.Log.Warn("persist last wind alert time", "err", err)
+			}
+			s.Log.Info("telegram alert sent",
+				"msg", msg,
+				"left", alertLeft,
+				"spot", alertSpot,
+				"right", alertRight,
+				"interval_min", alertIntervalMin,
+			)
 		}
 	}
 
 	return res, nil
+}
+
+func alertSideGust(st *store.Store, spotID, fallback string) string {
+	gust, err := st.LatestGust(spotID)
+	if err != nil || gust <= 0 {
+		if fallback != "" {
+			return fallback
+		}
+		return "0"
+	}
+	return fmt.Sprintf("%d", int(gust))
 }

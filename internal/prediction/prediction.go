@@ -8,6 +8,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/ben/ikite-go/internal/sources/openwrf"
 	"github.com/ben/ikite-go/internal/store"
 )
 
@@ -21,19 +22,39 @@ const (
 
 // Result is a same-day thermal wind forecast for KY (Kiryat Yam).
 type Result struct {
-	Location        string    `json:"location"`
-	Date            string    `json:"date"`
-	GeneratedAt     time.Time `json:"generated_at"`
-	StrongestWindow string    `json:"strongest_window"`
-	ExpectedPeak    string    `json:"expected_peak"`
-	Direction       string    `json:"direction"`
-	GoodWindow      string    `json:"good_window"`
-	WindDown        string    `json:"wind_down"`
-	Conditions      string    `json:"conditions,omitempty"`
-	Current         string    `json:"current,omitempty"`
-	BasedOnReadings int       `json:"based_on_readings"`
-	SimilarDays     int           `json:"similar_days"`
-	History         *HistoryScore `json:"history,omitempty"`
+	Location        string         `json:"location"`
+	Date            string         `json:"date"`
+	GeneratedAt     time.Time      `json:"generated_at"`
+	StrongestWindow string         `json:"strongest_window"`
+	ExpectedPeak    string         `json:"expected_peak"`
+	Direction       string         `json:"direction"`
+	GoodWindow      string         `json:"good_window"`
+	WindDown        string         `json:"wind_down"`
+	Source          string         `json:"source,omitempty"`
+	Conditions      string         `json:"conditions,omitempty"`
+	Current         string         `json:"current,omitempty"`
+	BasedOnReadings int            `json:"based_on_readings"`
+	SimilarDays     int            `json:"similar_days"`
+	History         *HistoryScore  `json:"history,omitempty"`
+	OpenWRF         *ModelForecast `json:"openwrf,omitempty"`
+}
+
+// ModelForecast summarizes a numeric model forecast used on the prediction page.
+type ModelForecast struct {
+	Model           string           `json:"model"`
+	StrongestWindow string           `json:"strongest_window"`
+	ExpectedPeak    string           `json:"expected_peak"`
+	Direction       string           `json:"direction"`
+	GoodWindow      string           `json:"good_window"`
+	WindDown        string           `json:"wind_down"`
+	Hours           []ModelHourPoint `json:"hours,omitempty"`
+}
+
+type ModelHourPoint struct {
+	Time    string  `json:"time"`
+	Wind    float64 `json:"wind"`
+	Gust    float64 `json:"gust"`
+	WindDir float64 `json:"wind_dir"`
 }
 
 // Compute matches today's readings against similar historical Jul–Aug days.
@@ -51,13 +72,13 @@ func compute(ctx context.Context, st *store.Store, now time.Time, loc *time.Loca
 	if err != nil {
 		return nil, err
 	}
-	today, err := dayProfileFromStats(dayStart, todayRows)
-	if err != nil {
-		return nil, err
-	}
+	today := dayProfileFromStats(dayStart, todayRows)
 	history, err := st.KySummerDayProfiles(dayStart)
 	if err != nil {
 		return nil, err
+	}
+	if len(history) == 0 {
+		return nil, fmt.Errorf("prediction: no Jul–Aug history available")
 	}
 	baseline := hourlyMap(store.BaselineHourlyStats(history))
 
@@ -73,9 +94,26 @@ func compute(ctx context.Context, st *store.Store, now time.Time, loc *time.Loca
 		Direction:       directionLabel(fc.peak.AvgDir),
 		GoodWindow:      formatWindow(fc.goodStart, fc.goodEnd),
 		WindDown:        fmt.Sprintf("~%02d:00", fc.windDown),
+		Source:          "history",
 		BasedOnReadings: store.TotalReadings(history),
 		SimilarDays:     len(matches),
-		Conditions:      formatMatchConditions(matches, now.Hour()),
+		Conditions:      formatMatchConditions(matches, now.Hour(), len(today.Hours) == 0),
+	}
+
+	if ow, err := openWRFForecast(st, dayStart, loc); err == nil && ow != nil {
+		res.OpenWRF = ow
+		// Prefer openWRF for the main prediction cards when available.
+		res.StrongestWindow = ow.StrongestWindow
+		res.ExpectedPeak = ow.ExpectedPeak
+		res.Direction = ow.Direction
+		res.GoodWindow = ow.GoodWindow
+		res.WindDown = ow.WindDown
+		res.Source = openwrf.ModelName
+		if res.Conditions != "" {
+			res.Conditions = openwrf.ModelName + " model forecast; " + res.Conditions
+		} else {
+			res.Conditions = openwrf.ModelName + " model forecast"
+		}
 	}
 
 	if hist, err := evaluateHistory(st, dayStart, loc); err == nil {
@@ -93,15 +131,73 @@ func compute(ctx context.Context, st *store.Store, now time.Time, loc *time.Loca
 	return res, nil
 }
 
-func dayProfileFromStats(date time.Time, rows []store.HourlyWindStat) (store.DayProfile, error) {
-	if len(rows) == 0 {
-		return store.DayProfile{}, fmt.Errorf("prediction: no readings for today")
+func openWRFForecast(st *store.Store, dayStart time.Time, loc *time.Location) (*ModelForecast, error) {
+	rows, err := st.ListWindForecastByLocation("ky", dayStart)
+	if err != nil {
+		return nil, err
 	}
+	byHour := map[int]hourForecast{}
+	var points []ModelHourPoint
+	for _, r := range rows {
+		if r.IDModel != openwrf.ModelID && r.Model != openwrf.ModelName {
+			continue
+		}
+		if r.Wind == nil || r.Gust == nil || r.WindDir == nil {
+			continue
+		}
+		p := r.Period.In(loc)
+		points = append(points, ModelHourPoint{
+			Time:    p.Format("15:04"),
+			Wind:    *r.Wind,
+			Gust:    *r.Gust,
+			WindDir: *r.WindDir,
+		})
+
+		hr := p.Hour()
+		cur := hourForecast{
+			AvgWind: *r.Wind,
+			AvgGust: *r.Gust,
+			MaxGust: *r.Gust,
+			AvgDir:  *r.WindDir,
+			Weight:  1,
+		}
+		if prev, ok := byHour[hr]; ok {
+			// Keep the stronger half-hour sample for peak detection.
+			if cur.AvgWind > prev.AvgWind {
+				cur.MaxGust = math.Max(prev.MaxGust, cur.MaxGust)
+				byHour[hr] = cur
+			} else {
+				prev.MaxGust = math.Max(prev.MaxGust, cur.MaxGust)
+				byHour[hr] = prev
+			}
+			continue
+		}
+		byHour[hr] = cur
+	}
+	if len(byHour) == 0 {
+		return nil, nil
+	}
+	peakStart, peakEnd := strongestFromForecast(byHour)
+	goodStart, goodEnd := goodFromForecast(byHour, goodWindKt)
+	windDown := fadeFromForecast(byHour, goodWindKt)
+	peak := statsForForecast(byHour, peakStart, peakEnd)
+	return &ModelForecast{
+		Model:           openwrf.ModelName,
+		StrongestWindow: formatWindow(peakStart, peakEnd),
+		ExpectedPeak:    formatPeak(peak),
+		Direction:       directionLabel(peak.AvgDir),
+		GoodWindow:      formatWindow(goodStart, goodEnd),
+		WindDown:        fmt.Sprintf("~%02d:00", windDown),
+		Hours:           points,
+	}, nil
+}
+
+func dayProfileFromStats(date time.Time, rows []store.HourlyWindStat) store.DayProfile {
 	p := store.DayProfile{Date: date, Hours: map[int]store.HourlyWindStat{}}
 	for _, h := range rows {
 		p.Hours[h.Hour] = h
 	}
-	return p, nil
+	return p
 }
 
 type dayMatch struct {
@@ -413,7 +509,10 @@ func formatPeak(s hourForecast) string {
 	return fmt.Sprintf("%d–%d kt sustained, gusts %d–%d kt", wLo, wHi, gLo, gHi)
 }
 
-func formatMatchConditions(matches []dayMatch, nowHour int) string {
+func formatMatchConditions(matches []dayMatch, nowHour int, noTodayData bool) string {
+	if noTodayData {
+		return "no KY readings for today yet; using Jul–Aug climatology baseline"
+	}
 	if len(matches) == 0 {
 		return fmt.Sprintf("no close Jul–Aug matches yet (comparing hours %d–%d); using summer baseline", compareStartHour, nowHour)
 	}

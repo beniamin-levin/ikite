@@ -3,21 +3,139 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Beach Cameras</title>
+  <title>ikite — Beach Cameras</title>
+  {{template "head_common" .}}
   <style>
-    iframe { max-width: 100%; margin-bottom: 16px; }
-    nav a { margin-right: 12px; }
+    .cam-picker {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin: 12px 0 18px;
+    }
+    .cam-picker a {
+      display: inline-block;
+      padding: 6px 10px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: #fff;
+      color: var(--ink);
+      font-size: 0.9rem;
+      font-weight: 600;
+      text-decoration: none;
+    }
+    .cam-picker a:hover { background: var(--accent-soft); color: var(--accent); text-decoration: none; }
+    .cam-picker a.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+    .cams { display: grid; gap: 20px; }
+    .cams-group {
+      margin: 0 0 4px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      opacity: 0.7;
+    }
+    .cam h2 {
+      margin: 0 0 8px;
+      font-size: 1.05rem;
+      font-weight: 600;
+    }
+    iframe {
+      width: 100%;
+      max-width: 100%;
+      border: 0;
+      border-radius: 12px;
+      aspect-ratio: 16 / 9;
+      background: #111;
+      display: block;
+    }
   </style>
 </head>
 <body>
-  <nav>
-    <a href="/">Table</a>
-    <a href="/graph">Graph</a>
-    <a href="/camera">Camera</a>
-  </nav>
+  {{template "nav" .}}
+  <main class="page">
+    <h1>Beach cameras</h1>
+    <nav class="cam-picker" aria-label="Camera">
+      {{range .CamOptions}}
+      <a href="/camera?cam={{.Key}}"{{if .Active}} class="active"{{end}}>{{.Name}}</a>
+      {{end}}
+    </nav>
+    <div class="cams">
+      {{if or .ShowAll (eq .Cam "kh") (eq .Cam "ky") (eq .Cam "bg") (eq .Cam "nirvana") (eq .Cam "mm") (eq .Cam "nahariya")}}
+      {{if .ShowAll}}<p class="cams-group">Mediterranean — North</p>{{end}}
+      {{end}}
 
-  <iframe width="1500" height="700" src="https://www.youtube.com/embed/EfU0pofsmew?si=sQxHmlpRqvthMtpy" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+      {{if or .ShowAll (eq .Cam "kh")}}
+      <section class="cam">
+        <h2>Kiryat Haim</h2>
+        <iframe src="https://ipcamlive.com/player/player.php?alias=6469b4554f45e&amp;autoplay=1&amp;skin=white&amp;hidelink=true&amp;disablereportbutton=true&amp;disableautofullscreen=1&amp;disablezoombutton=1&amp;disableframecapture=1&amp;disableuserpause=1" title="Kiryat Haim beach camera" allow="autoplay; fullscreen" allowfullscreen loading="eager"></iframe>
+      </section>
+      {{end}}
 
-  <iframe width="1500" height="844" src="https://www.youtube.com/embed/_U6C9vCeAyA?si=ZLc2xQJTjL54YKgi" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+      {{if or .ShowAll (eq .Cam "ky")}}
+      <section class="cam">
+        <h2>Kiryat Yam</h2>
+        <iframe src="https://www.youtube.com/embed/EfU0pofsmew" title="Kiryat Yam beach camera" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen loading="lazy"></iframe>
+      </section>
+      {{end}}
+
+      {{if or .ShowAll (eq .Cam "bg")}}
+      <section class="cam">
+        <h2>Bat Galim</h2>
+        <iframe src="https://ipcamlive.com/player/player.php?alias=60997a5d22ca9&amp;autoplay=0&amp;skin=white&amp;hidelink=true&amp;disablereportbutton=true&amp;disableautofullscreen=1&amp;disablezoombutton=1&amp;disableframecapture=1" title="Bat Galim beach camera" allow="autoplay; fullscreen" allowfullscreen loading="lazy"></iframe>
+      </section>
+      {{end}}
+
+      {{if or .ShowAll (eq .Cam "nirvana")}}
+      <section class="cam">
+        <h2>Haifa Nirvana</h2>
+        <iframe src="https://ipcamlive.com/player/player.php?alias=60acaa1aeee83&amp;autoplay=0&amp;skin=white&amp;hidelink=true&amp;disablereportbutton=true&amp;disableautofullscreen=1&amp;disablezoombutton=1&amp;disableframecapture=1" title="Haifa Nirvana beach camera" allow="autoplay; fullscreen" allowfullscreen loading="lazy"></iframe>
+      </section>
+      {{end}}
+
+      {{if or .ShowAll (eq .Cam "mm")}}
+      <section class="cam">
+        <h2>Maagan Michael</h2>
+        <iframe src="https://ipcamlive.com/player/player.php?alias=5b17c8292282c&amp;autoplay=0&amp;skin=white&amp;hidelink=true&amp;disablereportbutton=true&amp;disableautofullscreen=1&amp;disablezoombutton=1&amp;disableframecapture=1" title="Maagan Michael beach camera" allow="autoplay; fullscreen" allowfullscreen loading="lazy"></iframe>
+      </section>
+      {{end}}
+
+      {{if or .ShowAll (eq .Cam "nahariya")}}
+      <section class="cam">
+        <h2>Nahariya (Sokolov)</h2>
+        <iframe src="https://ipcamlive.com/player/player.php?alias=65f00165e60f4&amp;autoplay=0&amp;skin=white&amp;hidelink=true&amp;disablereportbutton=true&amp;disableautofullscreen=1&amp;disablezoombutton=1&amp;disableframecapture=1" title="Nahariya Sokolov beach camera" allow="autoplay; fullscreen" allowfullscreen loading="lazy"></iframe>
+      </section>
+      {{end}}
+
+      {{if or .ShowAll (eq .Cam "zvulun") (eq .Cam "hilton")}}
+      {{if .ShowAll}}<p class="cams-group">Mediterranean — Center</p>{{end}}
+      {{end}}
+
+      {{if or .ShowAll (eq .Cam "zvulun")}}
+      <section class="cam">
+        <h2>Herzliya Zvulun</h2>
+        <iframe src="https://ipcamlive.com/player/player.php?alias=634548590c353&amp;autoplay=0&amp;skin=white&amp;hidelink=true&amp;disablereportbutton=true&amp;disableautofullscreen=1&amp;disablezoombutton=1&amp;disableframecapture=1" title="Herzliya Zvulun beach camera" allow="autoplay; fullscreen" allowfullscreen loading="lazy"></iframe>
+      </section>
+      {{end}}
+
+      {{if or .ShowAll (eq .Cam "hilton")}}
+      <section class="cam">
+        <h2>Tel Aviv Hilton</h2>
+        <iframe src="https://ipcamlive.com/player/player.php?alias=63454584c4c3c&amp;autoplay=0&amp;skin=white&amp;hidelink=true&amp;disablereportbutton=true&amp;disableautofullscreen=1&amp;disablezoombutton=1&amp;disableframecapture=1" title="Tel Aviv Hilton beach camera" allow="autoplay; fullscreen" allowfullscreen loading="lazy"></iframe>
+      </section>
+      {{end}}
+
+      {{if or .ShowAll (eq .Cam "kineret")}}
+      {{if .ShowAll}}<p class="cams-group">Kineret</p>{{end}}
+      <section class="cam">
+        <h2>Kineret (South Beach / Ambil-Yam)</h2>
+        <iframe src="https://ipcamlive.com/player/player.php?alias=61a4836d911ac&amp;autoplay=0&amp;skin=white&amp;hidelink=true&amp;disablereportbutton=true&amp;disableautofullscreen=1&amp;disablezoombutton=1&amp;disableframecapture=1" title="Kineret South Beach camera" allow="autoplay; fullscreen" allowfullscreen loading="lazy"></iframe>
+      </section>
+      {{end}}
+    </div>
+  </main>
 </body>
 </html>

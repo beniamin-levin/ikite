@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ikite — Spot Ratings Map</title>
+  {{template "head_common" .}}
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    .map-main { padding-top: 8px; padding-bottom: 8px; }
+    .map-top {
+      display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center;
+      margin-bottom: 8px;
+    }
+    .map-top h1 { margin: 0; font-size: 1.1rem; }
+    .map-top .muted { font-size: 0.8rem; }
+    .filters {
+      display: flex; flex-wrap: wrap; gap: 8px; align-items: end;
+      margin: 0 0 0 auto; padding: 0; border: 0;
+    }
+    .filters label { display: block; font-size: 0.7rem; color: var(--muted); margin-bottom: 2px; }
+    .filters input, .filters select, .filters button {
+      padding: 5px 8px; border: 1px solid var(--line); border-radius: 8px; font: inherit; font-size: 0.85rem;
+    }
+    .filters input { width: 5.5rem; }
+    .filters select { max-width: 11rem; }
+    .filters button { background: var(--accent); color: #fff; border-color: var(--accent); cursor: pointer; }
+    .legend { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 8px; }
+    .legend span { padding: 2px 6px; font-size: 0.72rem; border-radius: 6px; color: #111; }
+    #map {
+      height: calc(100dvh - var(--nav-h, 52px) - 130px);
+      min-height: 380px;
+      width: 100%;
+      border-radius: 12px; border: 1px solid var(--line);
+    }
+    @media only screen and (max-width: 700px) {
+      .filters { margin-left: 0; }
+      #map { height: calc(100dvh - var(--nav-h, 52px) - 170px); min-height: 320px; }
+    }
+  </style>
+</head>
+<body>
+  {{template "nav" .}}
+  <main class="page page-wide map-main">
+    <div class="map-top">
+      <h1>Kitesurfing spots</h1>
+      <p class="muted">{{.Count}} shown · colored by score rank</p>
+      <form class="filters" method="get" action="/spots/map">
+        <div>
+          <label for="limit">Limit</label>
+          <input id="limit" name="limit" type="number" min="1" max="5000" value="{{.Limit}}" />
+        </div>
+        <div>
+          <label for="country">Country</label>
+          <select id="country" name="country">
+            <option value="">Show all</option>
+            {{range .Countries}}
+            <option value="{{.}}"{{if eq $.Country .}} selected{{end}}>{{.}}</option>
+            {{end}}
+          </select>
+        </div>
+        <button type="submit">Apply</button>
+      </form>
+    </div>
+
+    <div class="legend">
+      <span style="background:#e10eff">Top 0–20%</span>
+      <span style="background:#ff14a2">Top 20–40%</span>
+      <span style="background:#ff4927">Top 40–60%</span>
+      <span style="background:#f1f100">Top 60–80%</span>
+      <span style="background:#00ff00">Top 80–100%</span>
+    </div>
+
+    <div id="map"></div>
+  </main>
+  <script>
+    const spots = {{.PointsJSON}};
+    const map = L.map('map').setView([32.0853, 34.7818], 7);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+    }).addTo(map);
+
+    const markers = [];
+    spots.forEach(function (spot) {
+      if (!spot.lat && !spot.lon) return;
+      const marker = L.circleMarker([spot.lat, spot.lon], {
+        radius: 8,
+        fillColor: spot.color || '#000',
+        color: '#000',
+        weight: 1,
+        opacity: 1,
+        fillOpacity: 0.85
+      }).addTo(map);
+      marker.bindPopup(
+        '<b>' + spot.spot_name + '</b><br>Score: ' + spot.score +
+        '<br><a href="/spots/details?spot_id=' + spot.spot_id + '" target="_blank">Details</a>' +
+        '<br><a href="https://www.windguru.cz/archive-stats.php?id_spot=' + spot.spot_id + '" target="_blank" rel="noopener">Windguru archive</a>'
+      );
+      markers.push(marker);
+    });
+    if (markers.length) {
+      map.fitBounds(L.featureGroup(markers).getBounds().pad(0.15));
+    }
+  </script>
+</body>
+</html>

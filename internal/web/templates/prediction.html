@@ -3,53 +3,53 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>KY Wind Prediction</title>
+  <title>ikite — KY Wind Prediction</title>
+  {{template "head_common" .}}
   <style>
-    * { box-sizing: border-box; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-      max-width: 480px;
-      margin: 24px auto;
-      padding: 0 16px;
-      color: #111;
-    }
-    h1 { font-size: 1.25rem; margin: 0 0 4px; }
-    .meta { color: #666; font-size: 0.875rem; margin-bottom: 24px; }
-    .card {
-      border: 1px solid #ddd;
-      border-radius: 8px;
-      padding: 16px;
-      margin-bottom: 12px;
-      background: #fafafa;
-    }
-    .card h2 {
+    .pred { max-width: 720px; }
+    .pred .card { margin-bottom: 12px; }
+    .pred .card h2 {
       font-size: 0.75rem;
       text-transform: uppercase;
       letter-spacing: 0.05em;
-      color: #666;
+      color: var(--muted);
       margin: 0 0 6px;
       font-weight: 600;
     }
-    .card p { margin: 0; font-size: 1.125rem; font-weight: 500; }
-    .card.highlight { background: #e8f5e9; border-color: #a5d6a7; }
-    .card.highlight p { font-size: 1.25rem; }
-    .status { color: #666; font-size: 0.875rem; margin-top: 16px; }
+    .pred .card p { margin: 0; font-size: 1.125rem; font-weight: 500; }
+    .pred .card.highlight { background: #e8f5e9; border-color: #a5d6a7; }
+    .status { color: var(--muted); font-size: 0.875rem; margin-top: 12px; }
     .err { color: #c00; }
-    nav a { margin-right: 12px; font-size: 0.875rem; }
+    .hours-wrap { overflow-x: auto; margin-top: 16px; }
+    .hours {
+      border-collapse: collapse;
+      width: 100%;
+      background: #fff;
+      font-size: 0.85rem;
+    }
+    .hours th, .hours td {
+      border: 1px solid var(--line);
+      padding: 4px 6px;
+      text-align: center;
+      white-space: nowrap;
+    }
+    .hours th { background: #f5f7fa; font-weight: 600; }
+    .hours th.peak, .hours td.peak {
+      background: #e8f5e9;
+      border-color: #a5d6a7;
+      font-weight: 700;
+    }
   </style>
 </head>
 <body>
-  <nav>
-    <a href="/">Table</a>
-    <a href="/graph">Graph</a>
-  </nav>
-
-  <h1>KY thermal prediction</h1>
-  <p class="meta" id="meta">Loading…</p>
-
-  <div id="content">
-    <p class="status">Analyzing Jul–Aug history…</p>
-  </div>
+  {{template "nav" .}}
+  <main class="page pred">
+    <h1>KY wind prediction</h1>
+    <p class="muted" id="meta">Loading…</p>
+    <div id="content">
+      <p class="status">Analyzing forecast…</p>
+    </div>
+  </main>
 
   <script>
     (function () {
@@ -62,25 +62,68 @@
           return r.json();
         })
         .then(function (d) {
-          meta.textContent = d.date + ' · ' + d.similar_days + ' similar summer days · ' + d.based_on_readings.toLocaleString() + ' readings';
-          content.innerHTML =
+          const source = d.source ? d.source : 'history';
+          meta.textContent = d.date + ' · source ' + source +
+            (d.similar_days != null ? ' · ' + d.similar_days + ' similar summer days' : '') +
+            (d.based_on_readings ? ' · ' + Number(d.based_on_readings).toLocaleString() + ' readings' : '');
+          let html =
             '<div class="card highlight"><h2>Strongest window</h2><p>' + esc(d.strongest_window) + '</p></div>' +
             '<div class="card"><h2>Expected peak</h2><p>' + esc(d.expected_peak) + '</p></div>' +
             '<div class="card"><h2>Direction</h2><p>' + esc(d.direction) + '</p></div>' +
             '<div class="card"><h2>Good window</h2><p>' + esc(d.good_window) + '</p></div>' +
-            '<div class="card"><h2>Wind down</h2><p>' + esc(d.wind_down) + '</p></div>' +
-            (d.conditions ? '<p class="status">' + esc(d.conditions) + '</p>' : '') +
-            (d.history && d.history.summary ? '<p class="status">Past accuracy: ' + esc(d.history.summary) + '</p>' : '') +
-            (d.current ? '<p class="status">Now: ' + esc(d.current) + '</p>' : '');
+            '<div class="card"><h2>Wind down</h2><p>' + esc(d.wind_down) + '</p></div>';
+          if (d.openwrf && d.openwrf.hours && d.openwrf.hours.length) {
+            const win = parseWindow((d.openwrf.strongest_window || d.strongest_window) || '');
+            html += '<h2 style="font-size:1rem;margin:20px 0 8px">openWRF timeline</h2><div class="hours-wrap"><table class="hours"><thead><tr>';
+            d.openwrf.hours.forEach(function (h) {
+              html += '<th' + (inWindow(h.time, win) ? ' class="peak"' : '') + '>' + esc(h.time) + '</th>';
+            });
+            html += '</tr></thead><tbody><tr>';
+            d.openwrf.hours.forEach(function (h) {
+              html += '<td' + (inWindow(h.time, win) ? ' class="peak"' : '') + '>' +
+                Math.round(h.wind) + '-' + Math.round(h.gust) + '</td>';
+            });
+            html += '</tr></tbody></table></div>';
+          }
+          if (d.conditions) html += '<p class="status">' + esc(d.conditions) + '</p>';
+          if (d.history && d.history.summary) html += '<p class="status">Past accuracy: ' + esc(d.history.summary) + '</p>';
+          if (d.current) html += '<p class="status">Now: ' + esc(d.current) + '</p>';
+          content.innerHTML = html;
+          scrollToStrongest();
         })
         .catch(function (e) {
           content.innerHTML = '<p class="err">Failed to load prediction: ' + esc(e.message) + '</p>';
           meta.textContent = '';
         });
 
+      function parseWindow(s) {
+        const m = String(s).match(/(\d{1,2}:\d{2})\s*[–-]\s*(\d{1,2}:\d{2})/);
+        if (!m) return null;
+        return { start: m[1], end: m[2] };
+      }
+
+      function timeToMin(t) {
+        const p = String(t).split(':');
+        return (parseInt(p[0], 10) || 0) * 60 + (parseInt(p[1], 10) || 0);
+      }
+
+      function inWindow(t, win) {
+        if (!win || !t) return false;
+        const v = timeToMin(t);
+        return v >= timeToMin(win.start) && v <= timeToMin(win.end);
+      }
+
+      function scrollToStrongest() {
+        const wrap = content.querySelector('.hours-wrap');
+        const peak = content.querySelector('.hours th.peak');
+        if (!wrap || !peak) return;
+        const left = peak.offsetLeft - (wrap.clientWidth / 2) + (peak.offsetWidth / 2);
+        wrap.scrollLeft = Math.max(0, left);
+      }
+
       function esc(s) {
         const el = document.createElement('span');
-        el.textContent = s;
+        el.textContent = s == null ? '' : String(s);
         return el.innerHTML;
       }
     })();

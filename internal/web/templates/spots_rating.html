@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ikite — Spot Ratings</title>
+  {{template "head_common" .}}
+  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css" />
+  <style>
+    table.dataTable { width: 100% !important; }
+    table.dataTable thead th { white-space: nowrap; }
+    .details-link { margin-left: 8px; font-size: 0.85rem; color: var(--muted); }
+  </style>
+</head>
+<body>
+  {{template "nav" .}}
+  <main class="page">
+    <h1>Windguru spot ratings</h1>
+    <p class="muted">Archive scores from Windguru monthly wind statistics (higher = more windy days).</p>
+    <div class="card">
+      <table id="ratings" class="display">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Spot</th>
+            <th>Country</th>
+            <th>Score</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{range $i, $r := .Ratings}}
+          <tr>
+            <td>{{inc $i}}</td>
+            <td>
+              <a href="https://www.windguru.cz/{{$r.SpotID}}" target="_blank" rel="noopener">{{$r.SpotName}}</a>
+              <a class="details-link" href="/spots/details?spot_id={{$r.SpotID}}">details</a>
+            </td>
+            <td>{{$r.CountryName}}</td>
+            <td>{{$r.Score}}</td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+  </main>
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+  <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+  <script>
+    $(function () {
+      $('#ratings').DataTable({
+        paging: false,
+        searching: true,
+        info: false,
+        order: [[3, 'desc']]
+      });
+    });
+  </script>
+</body>
+</html>

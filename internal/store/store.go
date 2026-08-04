@@ -87,6 +87,127 @@ func (s *Store) PredictionTelegramEnabled() (bool, error) {
 	return val != "no", nil
 }
 
+// ValidAlertTelegramIntervals are allowed wind-alert notification intervals (minutes).
+var ValidAlertTelegramIntervals = []int{5, 10, 15, 20, 30, 60}
+
+func NormalizeAlertTelegramInterval(v int) int {
+	for _, n := range ValidAlertTelegramIntervals {
+		if v == n {
+			return v
+		}
+	}
+	return 5
+}
+
+// AlertTelegramSpot returns the spot id used for wind threshold Telegram alerts.
+func (s *Store) AlertTelegramSpot() (string, error) {
+	val, err := s.GetSetting("alert_telegram_spot")
+	if err != nil {
+		return "ky", err
+	}
+	val = strings.TrimSpace(val)
+	if val == "" {
+		return "ky", nil
+	}
+	return val, nil
+}
+
+// AlertTelegramSpotLeft returns the left spot shown in wind Telegram alerts.
+func (s *Store) AlertTelegramSpotLeft() (string, error) {
+	val, err := s.GetSetting("alert_telegram_spot_left")
+	if err != nil {
+		return "15233", err
+	}
+	val = strings.TrimSpace(val)
+	if val == "" {
+		return "15233", nil
+	}
+	return val, nil
+}
+
+// AlertTelegramSpotRight returns the right spot shown in wind Telegram alerts.
+func (s *Store) AlertTelegramSpotRight() (string, error) {
+	val, err := s.GetSetting("alert_telegram_spot_right")
+	if err != nil {
+		return "bg", err
+	}
+	val = strings.TrimSpace(val)
+	if val == "" {
+		return "bg", nil
+	}
+	return val, nil
+}
+
+// AlertTelegramIntervalMin returns minutes between wind Telegram alerts.
+func (s *Store) AlertTelegramIntervalMin() (int, error) {
+	val, err := s.GetSetting("alert_telegram_interval_min")
+	if err != nil {
+		return 5, err
+	}
+	if val == "" {
+		return 5, nil
+	}
+	n, err := strconv.Atoi(val)
+	if err != nil {
+		return 5, nil
+	}
+	return NormalizeAlertTelegramInterval(n), nil
+}
+
+func (s *Store) SetAlertTelegramSpot(spotID string) error {
+	spotID = strings.TrimSpace(spotID)
+	if spotID == "" {
+		spotID = "ky"
+	}
+	return s.SetSetting("alert_telegram_spot", spotID)
+}
+
+func (s *Store) SetAlertTelegramSpotLeft(spotID string) error {
+	spotID = strings.TrimSpace(spotID)
+	if spotID == "" {
+		spotID = "15233"
+	}
+	return s.SetSetting("alert_telegram_spot_left", spotID)
+}
+
+func (s *Store) SetAlertTelegramSpotRight(spotID string) error {
+	spotID = strings.TrimSpace(spotID)
+	if spotID == "" {
+		spotID = "bg"
+	}
+	return s.SetSetting("alert_telegram_spot_right", spotID)
+}
+
+func (s *Store) SetAlertTelegramIntervalMin(minutes int) error {
+	return s.SetSetting("alert_telegram_interval_min", strconv.Itoa(NormalizeAlertTelegramInterval(minutes)))
+}
+
+func (s *Store) LastWindAlertAt() (time.Time, error) {
+	val, err := s.GetSetting("alert_telegram_last_sent")
+	if err != nil || val == "" {
+		return time.Time{}, err
+	}
+	t, err := time.Parse(time.RFC3339, val)
+	if err != nil {
+		return time.Time{}, nil
+	}
+	return t, nil
+}
+
+func (s *Store) SetLastWindAlertAt(t time.Time) error {
+	return s.SetSetting("alert_telegram_last_sent", t.UTC().Format(time.RFC3339))
+}
+
+func (s *Store) LatestWindGust(location string) (wind, gust float64, err error) {
+	err = s.DB.QueryRow(`
+		SELECT wind, gust FROM wind_data WHERE location = ?
+		ORDER BY period DESC LIMIT 1`, location).Scan(&wind, &gust)
+	if err == sql.ErrNoRows {
+		return 0, 0, nil
+	}
+	return wind, gust, err
+}
+
 func (s *Store) ForecastSchedule() (startHour, endHour int, err error) {
 	startHour, endHour = 8, 22
 	if v, err := s.GetSetting("forecast_start_hour"); err != nil {

@@ -96,3 +96,17 @@ func TestDirectionLabel(t *testing.T) {
 		t.Fatalf("got %q", got)
 	}
 }
+
+func TestFormatMatchConditionsNoToday(t *testing.T) {
+	got := formatMatchConditions(nil, 15, true)
+	if got != "no KY readings for today yet; using Jul–Aug climatology baseline" {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestDayProfileFromStatsEmpty(t *testing.T) {
+	p := dayProfileFromStats(time.Date(2026, 7, 28, 0, 0, 0, 0, time.UTC), nil)
+	if len(p.Hours) != 0 {
+		t.Fatalf("want empty hours, got %d", len(p.Hours))
+	}
+}

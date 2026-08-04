@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ikite — {{.Name}} details</title>
+  {{template "head_common" .}}
+  <style>
+    .bar { display: flex; width: 100%; height: 22px; border-radius: 4px; overflow: hidden; border: 1px solid var(--line); }
+    .bar div { height: 100%; font-size: 11px; line-height: 22px; text-align: center; color: #111; min-width: 0; overflow: hidden; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 8px; border-bottom: 1px solid var(--line); }
+    th { text-align: left; color: var(--muted); font-size: 0.85rem; }
+    td.center { text-align: center; width: 60px; }
+    .legend { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 18px; font-size: 0.85rem; }
+    .legend span { display: inline-flex; align-items: center; gap: 6px; }
+    .swatch { width: 14px; height: 14px; border-radius: 3px; border: 1px solid rgba(0,0,0,.15); }
+  </style>
+</head>
+<body>
+  {{template "nav" .}}
+  <main class="page">
+    <h1>
+      <a href="https://www.windguru.cz/{{.SpotID}}" target="_blank" rel="noopener">{{.Name}}</a>
+    </h1>
+    <p class="muted"><a href="/spots/rating">← Back to ratings</a></p>
+
+    <div class="legend">
+      <span><i class="swatch" style="background:#e10eff"></i>8+ Bft</span>
+      <span><i class="swatch" style="background:#ff14a2"></i>7 Bft</span>
+      <span><i class="swatch" style="background:#ff4927"></i>6 Bft</span>
+      <span><i class="swatch" style="background:#f1f100"></i>5 Bft</span>
+      <span><i class="swatch" style="background:#00ff00"></i>4 Bft</span>
+      <span><i class="swatch" style="background:#65f7ec"></i>3 Bft</span>
+      <span><i class="swatch" style="background:#fff"></i>2- Bft</span>
+    </div>
+
+    <div class="card">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:70px">Month</th>
+            <th>Wind distribution (%)</th>
+            <th style="width:70px" class="center">Score</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{range .Months}}
+          <tr>
+            <td class="center">{{.Month}}</td>
+            <td>
+              <div class="bar">
+                {{/* cumulative widths: each Bft field is cumulative percent in source data */}}
+                <div style="background:#e10eff;width:{{.Bft8Plus}}%">{{if gt .Bft8Plus 0}}{{.Bft8Plus}}{{end}}</div>
+                <div style="background:#ff14a2;width:{{subtract .Bft7 .Bft8Plus}}%">{{if gt (subtract .Bft7 .Bft8Plus) 0}}{{.Bft7}}{{end}}</div>
+                <div style="background:#ff4927;width:{{subtract .Bft6 .Bft7}}%">{{if gt (subtract .Bft6 .Bft7) 0}}{{.Bft6}}{{end}}</div>
+                <div style="background:#f1f100;width:{{subtract .Bft5 .Bft6}}%">{{if gt (subtract .Bft5 .Bft6) 0}}{{.Bft5}}{{end}}</div>
+                <div style="background:#00ff00;width:{{subtract .Bft4 .Bft5}}%">{{if gt (subtract .Bft4 .Bft5) 0}}{{.Bft4}}{{end}}</div>
+                <div style="background:#65f7ec;width:{{subtract .Bft3 .Bft4}}%">{{if gt (subtract .Bft3 .Bft4) 0}}{{.Bft3}}{{end}}</div>
+                <div style="background:#ffffff;width:{{subtract .Bft2Minus .Bft3}}%">{{if gt (subtract .Bft2Minus .Bft3) 0}}{{.Bft2Minus}}{{end}}</div>
+              </div>
+            </td>
+            <td class="center">{{.Score}}</td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+  </main>
+</body>
+</html>

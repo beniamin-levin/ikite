@@ -3,65 +3,174 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Israel Wind Data</title>
+  <title>ikite — Israel Wind Data</title>
+  {{template "head_common" .}}
   <style>
-    table td { text-align: center; padding-right: 7px; }
+    table { border-collapse: collapse; width: 100%; background: #fff; }
+    table td { text-align: center; padding: 4px 7px; white-space: nowrap; }
     table thead td:not(:first-child) {
       padding-right: 0; border: 1px solid #00000017; border-bottom-color: black;
-    }
-    @media only screen and (max-width: 600px) {
-      table td { padding-right: 2px; }
-      body { margin-left: 2px; font-size: 11px; }
     }
     .wind18 { background-color: #ffe100; }
     .wind16 { background-color: #cbff00; }
     .wind14 { background-color: rgba(11,254,0,1); }
     .wind10 { background-color: rgba(82,249,192,1); }
     .wind8 { background-color: rgba(157,250,246,1); }
-    .wind_arrow { width: 15px; height: 15px; }
-    .report_en { margin-bottom: 12px; max-width: 900px; }
-    nav a { margin-right: 12px; }
+    .wind_arrow { width: 15px; height: 15px; vertical-align: middle; }
+    .th-short { display: none; }
+    .report_en {
+      width: 100%;
+      max-width: none;
+      margin-bottom: 16px;
+      line-height: 1.45;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+    .table-wrap {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+    }
+    @media only screen and (max-width: 700px) {
+      .page.page-wide { padding-left: 6px; padding-right: 6px; }
+      .report_en { padding: 10px; font-size: 0.88rem; margin-bottom: 10px; line-height: 1.35; }
+      .table-wrap {
+        overflow-x: hidden;
+        border-radius: 8px;
+      }
+      table {
+        width: 100%;
+        table-layout: fixed;
+        font-size: 10px;
+        line-height: 1.1;
+      }
+      table td {
+        padding: 2px 1px;
+        letter-spacing: -0.3px;
+        overflow: hidden;
+      }
+      table td:first-child { width: 34px; }
+      table thead td { font-size: 9px; }
+      table small { display: none; }
+      .th-full { display: none; }
+      .th-short { display: inline; }
+      .wind_arrow { width: 10px; height: 10px; margin-right: -1px; }
+    }
+    /* Ultra-narrow: Apple Watch Ultra etc. */
+    @media only screen and (max-width: 399px) {
+      body { padding-top: 70px; }
+      .site-header { display: block !important; }
+      .site-header-inner {
+        display: block;
+        min-height: 0;
+        padding: 2px;
+        gap: 2px;
+        overflow-x: auto;
+        scrollbar-width: none;
+      }
+      .site-header-inner::-webkit-scrollbar { display: none; }
+      .brand { display: none; }
+      .site-nav-row1,
+      .site-nav-row2 {
+        flex: 0 0 auto;
+        flex-wrap: nowrap;
+        gap: 1px;
+      }
+      .site-nav a {
+        font-size: 7px;
+        padding: 2px 3px;
+        border-radius: 3px;
+      }
+      .report_en {
+        display: block !important;
+        margin: 1px 0 2px;
+        padding: 4px;
+        border-radius: 0;
+        font-size: 8px;
+        line-height: 1.2;
+      }
+      .page.page-wide { padding: 1px !important; }
+      .table-wrap {
+        width: 100%;
+        overflow-x: hidden;
+        border: 0;
+        border-radius: 0;
+      }
+      table {
+        width: 100%;
+        table-layout: fixed;
+        font-size: 8px;
+        line-height: 1.05;
+      }
+      table td {
+        min-width: 0;
+        overflow: hidden;
+        padding: 1px 0;
+        letter-spacing: -0.25px;
+      }
+      table td:first-child { width: 25px; }
+      table thead td {
+        font-size: 7px;
+        text-overflow: clip;
+      }
+      table small { display: none; }
+      .wind_arrow {
+        width: 8px;
+        height: 8px;
+        margin-right: -1px;
+      }
+    }
   </style>
 </head>
 <body>
-  <nav>
-    <a href="/">Table</a>
-    <a href="/graph">Graph</a>
-    <a href="/camera">Camera</a>
-    <a href="/?p=day">Day</a>
-    <a href="/?p=week">Week</a>
-  </nav>
+  {{template "nav" .}}
+  <main class="page page-wide">
+    {{if .ReportEN}}
+    <div class="report_en card">{{.ReportEN}}</div>
+    {{end}}
 
-  {{if .ReportEN}}
-  <div class="report_en">{{.ReportEN}}</div>
-  {{end}}
-
-  <table>
-    <thead>
-      <tr>
-        <td></td>
-        {{range .Headers}}
-        <td{{if .CSS}} class="{{.CSS}}"{{end}}>{{boldKY .Name .Key}}</td>
-        {{end}}
-      </tr>
-    </thead>
-    <tbody>
-      {{range .Rows}}
-      <tr>
-        <td>{{.Time}}</td>
-        {{range .Cells}}
-          {{if .Empty}}
-          <td></td>
-          {{else}}
-          <td{{if .CSS}} class="{{.CSS}}"{{end}}>
-            <svg class="wind_arrow" version="1.1" viewBox="0 0 100 100"><g transform="rotate({{.WindDir}},50,50) translate(0,5)"><path d="m50,0 -20,30 16,-3 -3,63 14,0 -3,-63 16,3 -20,-30z" fill="black" stroke-width="0"></path></g></svg>
-            {{printf "%.0f" .Wind}}-{{printf "%.0f" .Gust}}{{if .Temp}}<small> {{temp .Temp}}℃</small>{{end}}
-          </td>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <td></td>
+            {{range .Headers}}
+            <td data-spot="{{.Key}}"{{if .CSS}} class="{{.CSS}}"{{end}}>
+              <span class="th-full">{{boldKY .Name .Key}}</span>
+              <span class="th-short">{{if eq .Key "ky"}}<b>KY</b>{{else}}{{shortSpot .Key .Name}}{{end}}</span>
+            </td>
+            {{end}}
+          </tr>
+        </thead>
+        <tbody>
+          {{range .Rows}}
+          <tr>
+            <td>{{.Time}}</td>
+            {{range .Cells}}
+              {{if .Empty}}
+              <td></td>
+              {{else}}
+              <td{{if .CSS}} class="{{.CSS}}"{{end}}>
+                <svg class="wind_arrow" version="1.1" viewBox="0 0 100 100"><g transform="rotate({{.WindDir}},50,50) translate(0,5)"><path d="m50,0 -20,30 16,-3 -3,63 14,0 -3,-63 16,3 -20,-30z" fill="black" stroke-width="0"></path></g></svg>
+                {{printf "%.0f" .Wind}}-{{printf "%.0f" .Gust}}{{if .Temp}}<small> {{temp .Temp}}℃</small>{{end}}
+              </td>
+              {{end}}
+            {{end}}
+          </tr>
           {{end}}
-        {{end}}
-      </tr>
-      {{end}}
-    </tbody>
-  </table>
+        </tbody>
+      </table>
+    </div>
+  </main>
+  <script src="/static/prefs-layout.js"></script>
+  <script>
+    (function () {
+      var spots = {{.CollectSpotDefaults}};
+      var prefs = IkitePrefs.mergeCollectLayout(spots, { saveOnMigrate: true });
+      IkitePrefs.applyTableLayout(IkitePrefs.displayOrder(spots, prefs));
+    })();
+  </script>
 </body>
 </html>

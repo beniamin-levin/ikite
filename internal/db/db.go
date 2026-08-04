@@ -141,6 +141,20 @@ func seedLegacyMigrations(db *sql.DB, paths []string) error {
 		}
 	}
 
+	hasWGRating, err := tableExists(db, "wind_wg_raiting")
+	if err != nil {
+		return err
+	}
+	if hasWGRating {
+		if applied, err := migrationApplied(db, "013_wg_rating.sql"); err != nil {
+			return err
+		} else if !applied {
+			if err := markMigrationApplied(db, "013_wg_rating.sql"); err != nil {
+				return err
+			}
+		}
+	}
+
 	hasSpots, err := tableExists(db, "spots")
 	if err != nil {
 		return err
