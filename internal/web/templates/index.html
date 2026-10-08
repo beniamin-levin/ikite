@@ -153,7 +153,8 @@
       overflow: auto;
       border-top: 1px solid var(--line);
       border-bottom: 1px solid var(--line);
-      max-height: 720px;
+      /* Fill the window; fitTableHeight() refines this to the exact space left. */
+      max-height: calc(100vh - 230px);
     }
     #windTable {
       width: 100%;
@@ -629,7 +630,28 @@
         }
       }
 
+      // Desktop: the table scrolls inside a box that reaches the bottom of the
+      // window (sticky header stays visible). Phones show every row instead.
+      function fitTableHeight() {
+        var wrap = document.getElementById('wind-table-wrap');
+        if (!wrap) return;
+        if (window.matchMedia('(max-width: 900px)').matches) {
+          wrap.style.maxHeight = '';
+          return;
+        }
+        var main = wrap.closest('main');
+        var r = wrap.getBoundingClientRect();
+        var top = r.top + window.scrollY;
+        // The legend and padding under the table, measured on the content (the
+        // body stretches to the window, so its height would count empty space).
+        var below = main ? main.getBoundingClientRect().bottom - r.bottom : 60;
+        wrap.style.maxHeight = Math.max(320, window.innerHeight - top - below) + 'px';
+      }
+
       applyLayout();
+      fitTableHeight();
+      window.addEventListener('resize', fitTableHeight);
+      window.addEventListener('load', fitTableHeight);
       document.querySelectorAll('[data-unit]').forEach(function (btn) {
         btn.addEventListener('click', function () {
           document.querySelectorAll('[data-unit]').forEach(function (b) { b.classList.remove('active'); });
