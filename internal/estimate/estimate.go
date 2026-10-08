@@ -20,6 +20,13 @@
 //
 // Gusts get the same time-of-day treatment: 2.47 → 2.21 kt error held-out.
 //
+// Oct 2026, walk-forward over the last 30 days, 11 spots, 3,305 hours
+// (`estimate -backtest 30`): splitting each time-of-day bias by the forecast's
+// direction sector (N / W–NW / other, shrunk toward the block's bias) cut the
+// error 1.79 → 1.74 kt and gusts 2.61 → 2.50, best at Bat Galim (1.46 → 1.34)
+// and the Sea of Galilee (2.11 → 1.95). Splitting again by forecast strength
+// gained nothing on strong hours and was dropped.
+//
 // Time of day matters because at a sea-breeze spot a model's error is not the
 // same at 07:00 and 14:00: at Kiryat Yam, splitting the day cut the error from
 // 2.53 to 1.87 kt.
@@ -49,6 +56,34 @@ const (
 
 // Time-of-day blocks for bias correction: morning, sea-breeze peak, evening.
 const numBlocks = 3
+
+// Direction sectors, from the model's own forecast direction. A model's error
+// depends on the wind regime as well as the hour: at Hadera every model read
+// 2–3 kt low in a northerly and about right in the westerly sea breeze, while at
+// Bat Galim and Shavei Tzion they read 2–3 kt higher in a northerly.
+const (
+	sectorOther = iota // S, E, SW or unknown
+	sectorNorth        // 315°–030°
+	sectorWest         // 240°–315°
+	numSectors
+)
+
+func sectorOf(dir float64) int {
+	switch {
+	case dir < 0:
+		return sectorOther
+	case dir >= 315 || dir < 30:
+		return sectorNorth
+	case dir >= 240:
+		return sectorWest
+	}
+	return sectorOther
+}
+
+// shrinkHours pulls a direction cell's bias toward its time-of-day block's bias
+// in proportion to how little history it has: a cell with n hours gets weight
+// n/(n+shrinkHours), so one odd day cannot swing it.
+const shrinkHours = 24.0
 
 func blockOf(hour int) int {
 	switch {
@@ -90,7 +125,10 @@ type ModelCal struct {
 	Bias  float64 // mean(forecast − measured), whole day
 	Var   float64 // variance of the error once the bias is removed
 	// Block refines Bias and Var by time of day where there is enough history.
-	Block    [numBlocks]BlockCal
+	Block [numBlocks]BlockCal
+	// Cell refines Block by forecast direction sector (used when the
+	// calibration was fitted with ByDirection).
+	Cell     [numBlocks][numSectors]BlockCal
 	GustBias float64
 	GustVar  float64
 	HasGust  bool
@@ -99,6 +137,7 @@ type ModelCal struct {
 // Calibration is everything needed to turn fresh forecasts into an estimate.
 type Calibration struct {
 	Models map[string]ModelCal
+	Opt    Options
 	// Sigma is the estimate's own RMS error over the history it was fitted on.
 	Sigma float64
 }
@@ -114,8 +153,25 @@ type Point struct {
 	Models     int     // how many calibrated models contributed
 }
 
+// Options choose how Fit calibrates.
+type Options struct {
+	// ByDirection: biases depend on the forecast direction sector as well as
+	// the time of day.
+	ByDirection bool
+}
+
+// DefaultOptions is what the daily estimate uses.
+var DefaultOptions = Options{ByDirection: true}
+
 // Fit learns each model's bias and reliability from past hours.
-func Fit(history []Past) Calibration {
+func Fit(history []Past) Calibration { return FitWith(history, DefaultOptions) }
+
+// FitWith is Fit with explicit options (the backtest compares them).
+func FitWith(history []Past, opt Options) Calibration {
+	type cellAcc struct {
+		n, ng          int
+		s, ss, gs, gss float64
+	}
 	type acc struct {
 		n, ng                int
 		sum, sumSq, gs, gsSq float64
@@ -123,6 +179,7 @@ func Fit(history []Past) Calibration {
 		bs, bss              [numBlocks]float64
 		bgn                  [numBlocks]int
 		bgs, bgss            [numBlocks]float64
+		cell                 [numBlocks][numSectors]cellAcc
 	}
 	per := map[string]*acc{}
 	for _, h := range history {
@@ -137,9 +194,13 @@ func Fit(history []Past) Calibration {
 			a.sum += e
 			a.sumSq += e * e
 			b := blockOf(h.Hour)
+			c := &a.cell[b][sectorOf(f.Dir)]
 			a.bn[b]++
 			a.bs[b] += e
 			a.bss[b] += e * e
+			c.n++
+			c.s += e
+			c.ss += e * e
 			if f.Gust > 0 && h.GustPeak > 0 {
 				ge := f.Gust - h.GustPeak
 				a.ng++
@@ -148,11 +209,14 @@ func Fit(history []Past) Calibration {
 				a.bgn[b]++
 				a.bgs[b] += ge
 				a.bgss[b] += ge * ge
+				c.ng++
+				c.gs += ge
+				c.gss += ge * ge
 			}
 		}
 	}
 
-	cal := Calibration{Models: map[string]ModelCal{}}
+	cal := Calibration{Models: map[string]ModelCal{}, Opt: opt}
 	for name, a := range per {
 		if a.n < MinHours {
 			continue
@@ -185,6 +249,32 @@ func Fit(history []Past) Calibration {
 			mc.GustVar = math.Max(a.gsSq/float64(a.ng)-gm*gm, 0) + varFloor
 			mc.HasGust = true
 		}
+		// Direction cells: the bias is shrunk toward the block's (or whole-day)
+		// bias; the variance is the block's, so weights stay on the steadier
+		// whole-block record.
+		for b := 0; b < numBlocks; b++ {
+			parentBias, parentVar := mc.at(b)
+			parentGB, parentGV, parentGOK := mc.gustAtBlock(b)
+			for sec := 0; sec < numSectors; sec++ {
+				c := a.cell[b][sec]
+				// A block too thin to trust is not split further.
+				if c.n > 0 && mc.Block[b].OK {
+					n := float64(c.n)
+					cm := c.s / n
+					mc.Cell[b][sec] = BlockCal{
+						Bias: (n*cm + shrinkHours*parentBias) / (n + shrinkHours),
+						Var:  parentVar, OK: true,
+					}
+				}
+				if c.ng > 0 && parentGOK && mc.Block[b].GustOK {
+					n := float64(c.ng)
+					gm := c.gs / n
+					mc.Cell[b][sec].GustBias = (n*gm + shrinkHours*parentGB) / (n + shrinkHours)
+					mc.Cell[b][sec].GustVar = parentGV
+					mc.Cell[b][sec].GustOK = true
+				}
+			}
+		}
 		cal.Models[name] = mc
 	}
 	if !cal.Usable() {
@@ -209,20 +299,43 @@ func Fit(history []Past) Calibration {
 	return cal
 }
 
-// at returns the model's bias and error variance for an hour of the day.
-func (m ModelCal) at(hour int) (bias, variance float64) {
-	if b := m.Block[blockOf(hour)]; b.OK {
+// at returns the model's bias and error variance for a time-of-day block.
+func (m ModelCal) at(block int) (bias, variance float64) {
+	if b := m.Block[block]; b.OK {
 		return b.Bias, b.Var
 	}
 	return m.Bias, m.Var
 }
 
-// gustAt is at() for gusts. ok is false when the model has no gust history.
-func (m ModelCal) gustAt(hour int) (bias, variance float64, ok bool) {
-	if b := m.Block[blockOf(hour)]; b.GustOK {
+// gustAtBlock is at() for gusts. ok is false when the model has no gust history.
+func (m ModelCal) gustAtBlock(block int) (bias, variance float64, ok bool) {
+	if b := m.Block[block]; b.GustOK {
 		return b.GustBias, b.GustVar, true
 	}
 	return m.GustBias, m.GustVar, m.HasGust
+}
+
+// windCal is the bias and variance for one forecast: by time of day, refined by
+// the forecast's direction sector when the calibration uses it.
+func (c Calibration) windCal(m ModelCal, hour int, f Forecast) (bias, variance float64) {
+	b := blockOf(hour)
+	if c.Opt.ByDirection {
+		if cell := m.Cell[b][sectorOf(f.Dir)]; cell.OK {
+			return cell.Bias, cell.Var
+		}
+	}
+	return m.at(b)
+}
+
+// gustCal is windCal for gusts.
+func (c Calibration) gustCal(m ModelCal, hour int, f Forecast) (bias, variance float64, ok bool) {
+	b := blockOf(hour)
+	if c.Opt.ByDirection {
+		if cell := m.Cell[b][sectorOf(f.Dir)]; cell.GustOK {
+			return cell.GustBias, cell.GustVar, true
+		}
+	}
+	return m.gustAtBlock(b)
 }
 
 // blendWind is the bias-corrected, inverse-variance weighted wind.
@@ -233,7 +346,7 @@ func (c Calibration) blendWind(hour int, fs []Forecast) (float64, bool) {
 		if !ok {
 			continue
 		}
-		bias, variance := m.at(hour)
+		bias, variance := c.windCal(m, hour, f)
 		w := 1 / variance
 		num += w * math.Max(f.Wind-bias, 0)
 		den += w
@@ -261,13 +374,13 @@ func (c Calibration) Estimate(hour int, fs []Forecast) (Point, bool) {
 			continue
 		}
 		seen[f.Model] = true
-		bias, variance := m.at(hour)
+		bias, variance := c.windCal(m, hour, f)
 		w := 1 / variance
 		v := math.Max(f.Wind-bias, 0)
 		winds = append(winds, part{v, w})
 		num += w * v
 		den += w
-		if gb, gv, ok := m.gustAt(hour); ok && f.Gust > 0 {
+		if gb, gv, ok := c.gustCal(m, hour, f); ok && f.Gust > 0 {
 			gw := 1 / gv
 			gNum += gw * math.Max(f.Gust-gb, 0)
 			gDen += gw

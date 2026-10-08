@@ -86,7 +86,11 @@
   function displayOrder(spots, prefs) {
     prefs = prefs || mergeCollectLayout(spots);
     return prefs.collectOrder.filter(function (k) {
-      return prefs.collectVisible[k] !== false;
+      if (prefs.collectVisible[k] === false) return false;
+      // An IMS column (ky-ims, hp-ims…) follows its spot: Prefs has no toggle
+      // for it, so it must not show when the spot itself is hidden.
+      if (/-ims$/.test(k) && prefs.collectVisible[k.slice(0, -4)] === false) return false;
+      return true;
     });
   }
 

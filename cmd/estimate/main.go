@@ -14,6 +14,7 @@ import (
 
 func main() {
 	backfill := flag.Int("backfill", 0, "also replay this many previous days, each calibrated only on the days before it")
+	backtest := flag.Int("backtest", 0, "score the calibration methods over this many past days (nothing is written)")
 	flag.Parse()
 
 	log := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
@@ -31,6 +32,13 @@ func main() {
 	defer sqlDB.Close()
 
 	svc := &collector.EstimateService{Cfg: cfg, Store: store.New(sqlDB), Log: log}
+	if *backtest > 0 {
+		if err := svc.Backtest(os.Stdout, time.Now(), *backtest); err != nil {
+			log.Error("backtest failed", "err", err)
+			os.Exit(1)
+		}
+		return
+	}
 	if err := svc.Run(time.Now(), *backfill); err != nil {
 		log.Error("estimate failed", "err", err)
 		os.Exit(1)

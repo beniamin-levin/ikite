@@ -108,7 +108,7 @@ func New(cfg *config.Config, st *store.Store, log *slog.Logger) (*Server, error)
 		"shortSpot": func(key, name string) string {
 			abbrevs := map[string]string{
 				"ky": "KY", "kh": "KH", "bg": "BG", "st": "ST",
-				"ky-ims": "AFQ", "kh-ims": "REF",
+				"ky-ims": "AFQ", "kh-ims": "REF", "hp-ims": "HDP",
 				"15233": "BET", "2752": "SEA", "2256": "Atl", "hp": "Had",
 				"5730": "Mer", "5731": "Zem", "5732": "Avn", "1909": "Dia",
 				"3379": "Kin", "1091": "Par", "5500": "Myk", "14905": "Squ",
@@ -365,6 +365,9 @@ func indexBucketKey(t time.Time, tz *time.Location, spec indexPeriodSpec) string
 	return t.Format(spec.DateFmt)
 }
 
+// imsColumnSpots get a dedicated IMS column next to them in the live table.
+var imsColumnSpots = map[string]bool{"ky": true, "kh": true, "hp": true}
+
 // imsColumnName returns the display label for a dedicated IMS table column.
 func imsColumnName(parentID, imsLoc string) string {
 	switch imsLoc {
@@ -372,6 +375,8 @@ func imsColumnName(parentID, imsLoc string) string {
 		return "IMS Afeq"
 	case "ims41":
 		return "IMS Refineries"
+	case "ims46":
+		return "IMS Hadera Port"
 	default:
 		if parentID == "ky" {
 			return "KY IMS"
@@ -400,7 +405,7 @@ func collectLayoutSpots(spots []models.Spot) []struct {
 			Name    string
 			Display bool
 		}{Key: sp.ID, Name: sp.Name, Display: sp.Visible})
-		if (sp.ID == "ky" || sp.ID == "kh") && sp.IMSStationID != nil {
+		if imsColumnSpots[sp.ID] && sp.IMSStationID != nil {
 			imsLoc := ims.LocationKey(*sp.IMSStationID)
 			out = append(out, struct {
 				Key     string
@@ -500,7 +505,7 @@ func (s *Server) buildIndexTableView(period string, now time.Time) (*indexTableV
 	cols := make([]indexColSpec, 0, len(order)+2)
 	for _, loc := range order {
 		cols = append(cols, indexColSpec{Key: loc, Name: titles[loc], Loc: loc})
-		if (loc == "ky" || loc == "kh") && imsLocBySpot[loc] != "" {
+		if imsColumnSpots[loc] && imsLocBySpot[loc] != "" {
 			cols = append(cols, indexColSpec{
 				Key: loc + "-ims", Name: imsColumnName(loc, imsLocBySpot[loc]), Loc: imsLocBySpot[loc],
 				IsIMS: true, Parent: loc,

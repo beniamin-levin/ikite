@@ -212,7 +212,7 @@ func TestSparseBlockFallsBackToWholeDay(t *testing.T) {
 	if c.Models["a"].Block[0].OK {
 		t.Fatalf("morning block has %d hours, below MinHours — must not be used", MinHours-1)
 	}
-	bias, _ := c.Models["a"].at(7)
+	bias, _ := c.windCal(c.Models["a"], 7, Forecast{Model: "a", Dir: -1})
 	if !near(bias, c.Models["a"].Bias, 1e-9) {
 		t.Fatalf("morning bias %.2f should fall back to whole-day %.2f", bias, c.Models["a"].Bias)
 	}
@@ -244,5 +244,33 @@ func TestGustBiasDependsOnTimeOfDay(t *testing.T) {
 	}
 	if !near(eve.Gust, 24, 1e-9) {
 		t.Fatalf("19:00 gust = %.2f, want 24 (no evening bias)", eve.Gust)
+	}
+}
+
+// A model that reads 3 kt low in a northerly and right in a westerly (the
+// Hadera pattern) is corrected by direction, not by one averaged bias.
+func TestBiasDependsOnDirection(t *testing.T) {
+	var h []Past
+	for d := 0; d < 40; d++ {
+		dir, fc := 280.0, 12.0 // westerly: forecast right
+		if d%2 == 0 {
+			dir, fc = 350, 9 // northerly: forecast 3 kt low
+		}
+		h = append(h, Past{Hour: 13, Wind: 12, Forecasts: []Forecast{
+			{Model: "a", Wind: fc, Dir: dir}, {Model: "b", Wind: fc, Dir: dir},
+		}})
+	}
+	byDir := FitWith(h, Options{ByDirection: true})
+	plain := FitWith(h, Options{ByDirection: false})
+	north := []Forecast{{Model: "a", Wind: 9, Dir: 350}, {Model: "b", Wind: 9, Dir: 350}}
+	pd, _ := byDir.Estimate(13, north)
+	pp, _ := plain.Estimate(13, north)
+	// 20 northerly hours shrunk toward the −1.5 block bias: −3·20/44 − 1.5·24/44.
+	want := 9 + (3*20+1.5*24)/44
+	if !near(pd.Wind, want, 1e-6) {
+		t.Fatalf("northerly estimate %.2f, want %.2f", pd.Wind, want)
+	}
+	if !(pd.Wind > pp.Wind) {
+		t.Fatalf("direction-aware %.2f should beat the averaged bias %.2f in a northerly", pd.Wind, pp.Wind)
 	}
 }

@@ -176,6 +176,10 @@ func pairHistory(obs []models.ObservedHour, fc map[string]*hourForecasts) []date
 // fitBefore calibrates on the estimateHistoryDays before day — never on day
 // itself or later, so no estimate is fitted on what it is trying to predict.
 func fitBefore(history []datedPast, day time.Time) estimate.Calibration {
+	return fitBeforeWith(history, day, estimate.DefaultOptions)
+}
+
+func fitBeforeWith(history []datedPast, day time.Time, opt estimate.Options) estimate.Calibration {
 	from := day.AddDate(0, 0, -estimateHistoryDays).Format("2006-01-02")
 	to := day.Format("2006-01-02")
 	var train []estimate.Past
@@ -184,7 +188,7 @@ func fitBefore(history []datedPast, day time.Time) estimate.Calibration {
 			train = append(train, h.past)
 		}
 	}
-	return estimate.Fit(train)
+	return estimate.FitWith(train, opt)
 }
 
 // estimateHours estimates every grouped hour whose day is in [from, to); a zero
