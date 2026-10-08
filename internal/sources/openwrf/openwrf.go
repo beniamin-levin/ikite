@@ -20,19 +20,18 @@ const (
 	ModelID   = 1000001
 	ModelName = "openWRF"
 
-	folderViewURL = "https://drive.google.com/embeddedfolderview?id=1IPRb1cSMBmTSzPdUK2rQAAhF7KuWwywr#list"
 	maxFolderSize = 2 << 20
 	maxPDFSize    = 10 << 20
 )
 
 var (
-	periodPattern = regexp.MustCompile(`^(\d{2})(\d{2})-(\d{2})(\d{2})$`)
-	fileIDPattern = regexp.MustCompile(`https://drive\.google\.com/file/d/([A-Za-z0-9_-]+)/view`)
+	periodPattern         = regexp.MustCompile(`^(\d{2})(\d{2})-(\d{2})(\d{2})$`)
+	fileIDPattern         = regexp.MustCompile(`https://drive\.google\.com/file/d/([A-Za-z0-9_-]+)/view`)
+	folderIDPattern       = regexp.MustCompile(`https://drive\.google\.com/drive/folders/([A-Za-z0-9_-]+)`)
+	driveFolderURLPattern = regexp.MustCompile(`(?:^|/)folders/([A-Za-z0-9_-]+)`)
 )
 
-// Explicit aliases from settings spot id → preferred Drive PDF stem
-// (without the 18z_1km_ prefix / .pdf suffix). Prefer kite-spot PDFs over
-// *_wind_station variants.
+// spotPDFAliases maps spot id → PDF stem (without 18z_1km_ prefix).
 var spotPDFAliases = map[string]string{
 	"ky":    "Kiryat_Yam",
 	"bg":    "Bat_Galim_Club",
@@ -40,13 +39,14 @@ var spotPDFAliases = map[string]string{
 	"15233": "Betzet",
 	"2256":  "Atlit_Mivtzar",
 	"1909":  "Kineret_Diamond",
-	"2752":  "Kineret_Migdal", // Sea of G
+	"2752":  "Kineret_Migdal",
 	"3379":  "Kineret_Gino",
 }
 
 type Client struct {
-	HTTPClient *http.Client
-	PDFURL     string // optional override: single fixed PDF URL (testing / one-spot)
+	HTTPClient    *http.Client
+	PDFURL        string // optional override: single fixed PDF URL (testing / one-spot)
+	driveFolderID string
 }
 
 type DriveFile struct {
@@ -56,15 +56,40 @@ type DriveFile struct {
 
 type SpotMapping struct {
 	Spot     models.Spot
-	PDF      DriveFile
+	URL      string
+	Label    string
 	Forecast int // storage key used as wind_forecast.windguru_id
+	PDF      DriveFile
 }
 
-func New(pdfURL string) *Client {
-	return &Client{
+func New(pdfURL, driveURL string) (*Client, error) {
+	c := &Client{
 		HTTPClient: &http.Client{Timeout: 45 * time.Second},
 		PDFURL:     pdfURL,
 	}
+	if driveURL != "" {
+		id, err := ParseDriveFolderID(driveURL)
+		if err != nil {
+			return nil, err
+		}
+		c.driveFolderID = id
+	}
+	return c, nil
+}
+
+// ParseDriveFolderID extracts a Google Drive folder ID from a share URL or raw ID.
+func ParseDriveFolderID(input string) (string, error) {
+	input = strings.TrimSpace(input)
+	if input == "" {
+		return "", fmt.Errorf("openWRF drive folder URL not configured")
+	}
+	if m := driveFolderURLPattern.FindStringSubmatch(input); len(m) > 1 {
+		return m[1], nil
+	}
+	if regexp.MustCompile(`^[A-Za-z0-9_-]+$`).MatchString(input) {
+		return input, nil
+	}
+	return "", fmt.Errorf("invalid openWRF drive folder URL: %q", input)
 }
 
 // ForecastKey returns a stable wind_forecast.windguru_id for a spot.
@@ -79,26 +104,73 @@ func ForecastKey(sp models.Spot) int {
 	return int(8_000_000 + (h % 1_000_000))
 }
 
-func (c *Client) ListPDFs() ([]DriveFile, error) {
-	resp, err := c.HTTPClient.Get(folderViewURL)
+// ListSpotMappings returns Google Drive PDF fetch URLs for each matched spot.
+func (c *Client) ListSpotMappings(spots []models.Spot) ([]SpotMapping, error) {
+	if c.PDFURL != "" {
+		for _, sp := range spots {
+			if sp.ID == "ky" {
+				return []SpotMapping{{
+					Spot:     sp,
+					URL:      c.PDFURL,
+					Label:    "pdf-override",
+					Forecast: ForecastKey(sp),
+				}}, nil
+			}
+		}
+	}
+
+	files, err := c.ListPDFs()
 	if err != nil {
-		return nil, fmt.Errorf("list Google Drive folder: %w", err)
+		return nil, err
+	}
+	mappings := MatchSpots(spots, files)
+	if len(mappings) == 0 {
+		return nil, fmt.Errorf("no openWRF PDFs matched settings spots")
+	}
+	return mappings, nil
+}
+
+func embeddedFolderViewURL(folderID string) string {
+	return "https://drive.google.com/embeddedfolderview?id=" + folderID + "#list"
+}
+
+func (c *Client) fetchFolderHTML(folderID string) (string, error) {
+	resp, err := c.HTTPClient.Get(embeddedFolderViewURL(folderID))
+	if err != nil {
+		return "", fmt.Errorf("list Google Drive folder %s: %w", folderID, err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("list Google Drive folder: HTTP %s", resp.Status)
+		return "", fmt.Errorf("list Google Drive folder %s: HTTP %s", folderID, resp.Status)
 	}
 
 	data, err := io.ReadAll(io.LimitReader(resp.Body, maxFolderSize+1))
 	if err != nil {
-		return nil, fmt.Errorf("read Google Drive folder: %w", err)
+		return "", fmt.Errorf("read Google Drive folder %s: %w", folderID, err)
 	}
 	if len(data) > maxFolderSize {
-		return nil, fmt.Errorf("read Google Drive folder: exceeds %d bytes", maxFolderSize)
+		return "", fmt.Errorf("read Google Drive folder %s: exceeds %d bytes", folderID, maxFolderSize)
 	}
+	return string(data), nil
+}
 
+func firstSubfolderID(html string) (string, error) {
+	for _, entry := range strings.Split(html, `<div class="flip-entry"`) {
+		match := folderIDPattern.FindStringSubmatch(entry)
+		if match == nil {
+			continue
+		}
+		if fileIDPattern.FindStringSubmatch(entry) != nil {
+			continue
+		}
+		return match[1], nil
+	}
+	return "", fmt.Errorf("no subfolders found in openWRF root folder")
+}
+
+func parsePDFsFromFolderHTML(html string) ([]DriveFile, error) {
 	var files []DriveFile
-	for _, entry := range strings.Split(string(data), `<div class="flip-entry"`) {
+	for _, entry := range strings.Split(html, `<div class="flip-entry"`) {
 		match := fileIDPattern.FindStringSubmatch(entry)
 		if match == nil {
 			continue
@@ -124,6 +196,25 @@ func (c *Client) ListPDFs() ([]DriveFile, error) {
 	return files, nil
 }
 
+func (c *Client) ListPDFs() ([]DriveFile, error) {
+	if c.driveFolderID == "" {
+		return nil, fmt.Errorf("OPENWRF_DRIVE_URL not configured")
+	}
+	rootHTML, err := c.fetchFolderHTML(c.driveFolderID)
+	if err != nil {
+		return nil, err
+	}
+	subfolderID, err := firstSubfolderID(rootHTML)
+	if err != nil {
+		return nil, err
+	}
+	subfolderHTML, err := c.fetchFolderHTML(subfolderID)
+	if err != nil {
+		return nil, err
+	}
+	return parsePDFsFromFolderHTML(subfolderHTML)
+}
+
 // MatchSpots maps settings spots to kite-spot PDFs (skips *_wind_station).
 func MatchSpots(spots []models.Spot, files []DriveFile) []SpotMapping {
 	byStem := map[string]DriveFile{}
@@ -145,8 +236,10 @@ func MatchSpots(spots []models.Spot, files []DriveFile) []SpotMapping {
 		used[pdf.ID] = true
 		out = append(out, SpotMapping{
 			Spot:     sp,
-			PDF:      pdf,
+			URL:      downloadURL(pdf.ID),
+			Label:    pdf.Name,
 			Forecast: ForecastKey(sp),
+			PDF:      pdf,
 		})
 	}
 	return out
@@ -164,14 +257,12 @@ func matchSpotPDF(sp models.Spot, byStem map[string]DriveFile) (DriveFile, bool)
 		return DriveFile{}, false
 	}
 
-	// Exact stem match after normalizing underscores/spaces.
 	for stem, f := range byStem {
 		if normalizeName(stem) == spotNorm {
 			return f, true
 		}
 	}
 
-	// Prefix / contains: prefer shortest stem that fully covers the spot name.
 	var best DriveFile
 	bestLen := 1 << 30
 	for stem, f := range byStem {
@@ -207,59 +298,69 @@ func normalizeName(s string) string {
 	return b.String()
 }
 
-func (c *Client) downloadURL(fileID string) string {
+func downloadURL(fileID string) string {
 	return "https://drive.usercontent.google.com/download?id=" + fileID + "&export=download&confirm=t"
 }
 
 func (c *Client) FetchFile(file DriveFile, reference time.Time, loc *time.Location) ([]models.WindForecastRow, error) {
-	return c.fetchURL(c.downloadURL(file.ID), reference, loc)
+	return c.FetchSource(downloadURL(file.ID), reference, loc)
+}
+
+func (c *Client) FetchSource(sourceURL string, reference time.Time, loc *time.Location) ([]models.WindForecastRow, error) {
+	return c.fetchURL(sourceURL, reference, loc)
+}
+
+func (c *Client) FetchForMapping(m SpotMapping, reference time.Time, loc *time.Location) ([]models.WindForecastRow, error) {
+	return c.fetchURL(m.URL, reference, loc)
 }
 
 func (c *Client) Fetch(reference time.Time, loc *time.Location) ([]models.WindForecastRow, error) {
 	if c.PDFURL != "" {
 		return c.fetchURL(c.PDFURL, reference, loc)
 	}
-	files, err := c.ListPDFs()
+	spots := []models.Spot{{ID: "ky", Name: "Kiryat Yam"}}
+	mappings, err := c.ListSpotMappings(spots)
 	if err != nil {
 		return nil, err
 	}
-	for _, f := range files {
-		if f.Name == "18z_1km_Kiryat_Yam.pdf" {
-			return c.FetchFile(f, reference, loc)
-		}
-	}
-	return nil, fmt.Errorf("18z_1km_Kiryat_Yam.pdf not found in Google Drive folder")
+	return c.FetchForMapping(mappings[0], reference, loc)
 }
 
-func (c *Client) fetchURL(pdfURL string, reference time.Time, loc *time.Location) ([]models.WindForecastRow, error) {
-	resp, err := c.HTTPClient.Get(pdfURL)
+func (c *Client) fetchURL(sourceURL string, reference time.Time, loc *time.Location) ([]models.WindForecastRow, error) {
+	data, err := c.fetchBytes(sourceURL)
 	if err != nil {
-		return nil, fmt.Errorf("download PDF: %w", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("download PDF: HTTP %s", resp.Status)
-	}
-
-	data, err := io.ReadAll(io.LimitReader(resp.Body, maxPDFSize+1))
-	if err != nil {
-		return nil, fmt.Errorf("read PDF: %w", err)
+		return nil, err
 	}
 	if len(data) > maxPDFSize {
-		return nil, fmt.Errorf("read PDF: exceeds %d bytes", maxPDFSize)
+		return nil, fmt.Errorf("read forecast PDF: exceeds %d bytes", maxPDFSize)
 	}
 	if !bytes.HasPrefix(data, []byte("%PDF-")) {
-		return nil, fmt.Errorf("download PDF: response is not a PDF")
+		return nil, fmt.Errorf("forecast is not a PDF")
 	}
-
-	text, err := extractText(data)
+	text, err := extractPDFText(data)
 	if err != nil {
 		return nil, err
 	}
 	return Parse(text, reference, loc)
 }
 
-func extractText(data []byte) (string, error) {
+func (c *Client) fetchBytes(sourceURL string) ([]byte, error) {
+	resp, err := c.HTTPClient.Get(sourceURL)
+	if err != nil {
+		return nil, fmt.Errorf("fetch forecast: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("fetch forecast: HTTP %s", resp.Status)
+	}
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxPDFSize+1))
+	if err != nil {
+		return nil, fmt.Errorf("read forecast: %w", err)
+	}
+	return data, nil
+}
+
+func extractPDFText(data []byte) (string, error) {
 	r, err := pdf.NewReader(bytes.NewReader(data), int64(len(data)))
 	if err != nil {
 		return "", fmt.Errorf("open PDF: %w", err)
@@ -300,16 +401,13 @@ func Parse(text string, reference time.Time, loc *time.Location) ([]models.WindF
 
 		period, err := parsePeriod(fields[0], reference, loc)
 		if err != nil {
-			// The source PDF currently has one malformed text glyph for 23:30
-			// even though the rendered page is correct. Preserve the 30-minute
-			// sequence when a date-like row follows a valid row.
 			if previous.IsZero() || len(fields[0]) < 5 || fields[0][4] != '-' {
 				continue
 			}
 			period = previous.Add(30 * time.Minute)
 		}
 		if seen[period] {
-			return nil, fmt.Errorf("duplicate forecast period %s", period)
+			continue
 		}
 		seen[period] = true
 		previous = period
@@ -330,7 +428,7 @@ func Parse(text string, reference time.Time, loc *time.Location) ([]models.WindF
 		return nil, fmt.Errorf("scan forecast text: %w", err)
 	}
 	if len(rows) == 0 {
-		return nil, fmt.Errorf("no forecast rows found in PDF")
+		return nil, fmt.Errorf("no forecast rows found")
 	}
 	return rows, nil
 }

@@ -9,6 +9,9 @@ build:
 	go build -o bin/forecast ./cmd/forecast
 	go build -o bin/wgforecast ./cmd/wgforecast
 	go build -o bin/openwrf ./cmd/openwrf
+	go build -o bin/extforecast ./cmd/extforecast
+	go build -o bin/forecastgust ./cmd/forecastgust
+	go build -o bin/ims ./cmd/ims
 	go build -o bin/prediction ./cmd/prediction
 
 run-server:

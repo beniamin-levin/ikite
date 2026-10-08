@@ -1,125 +1,1328 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{lang}}" dir="{{dir}}" data-theme="{{theme}}">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ikite — Forecast</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>{{T "title.forecast"}}</title>
   {{template "head_common" .}}
   <style>
-    .forecast-spot { margin-bottom: 28px; }
-    .forecast-spot h2 { margin: 0 0 8px; font-size: 1.1rem; }
-    .spot-picker {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-      margin: 12px 0 18px;
-    }
-    .spot-picker a {
-      display: inline-block;
-      padding: 6px 10px;
+    .forecast-page { max-width: 1450px; }
+    .compact-page-head { margin-bottom: 12px; }
+    .compact-page-head h1 { margin: 0; font-size: 31px; color: var(--text); }
+    .compact-page-head p { margin: 6px 0 0; color: var(--muted); font-size: 14px; }
+
+    .forecast-workspace {
+      overflow: hidden;
       border: 1px solid var(--line);
-      border-radius: 999px;
-      background: #fff;
-      color: var(--ink);
-      font-size: 0.9rem;
-      font-weight: 600;
-      text-decoration: none;
+      border-radius: 20px;
+      background: var(--fc-page-bg);
+      box-shadow: var(--shadow);
     }
-    .spot-picker a:hover { background: var(--accent-soft); color: var(--accent); text-decoration: none; }
-    .spot-picker a.active {
-      background: var(--accent);
-      border-color: var(--accent);
-      color: #fff;
+    .workspace-toolbar {
+      min-height: 68px;
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 14px;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      background: var(--fc-toolbar-bg);
     }
-    .table-wrap {
-      overflow-x: auto;
-      -webkit-overflow-scrolling: touch;
-      background: #fff;
+    .view-toggle {
+      display: inline-flex;
+      gap: 4px;
+      padding: 4px;
+      margin: 0;
       border: 1px solid var(--line);
       border-radius: 12px;
+      background: var(--fc-panel);
     }
-    table.forecast {
-      border-collapse: collapse;
-      width: 100%;
-      background: #fff;
-      font-size: 12px;
-    }
-    table.forecast td, table.forecast th {
-      text-align: center;
-      padding: 4px 6px;
+    .view-toggle button {
+      border: 0;
+      background: transparent;
+      color: var(--fc-muted);
+      padding: 9px 13px;
+      border-radius: 9px;
+      cursor: pointer;
+      font: inherit;
+      font-size: 13px;
+      font-weight: 600;
       white-space: nowrap;
-      border: 1px solid #00000017;
     }
-    table.forecast thead th {
-      background: #f5f7fa;
+    .view-toggle button.active {
+      color: var(--on-accent);
+      background: linear-gradient(var(--fc-btn), var(--fc-btn-deep));
+    }
+    #overviewView[hidden],
+    #detailedView[hidden] {
+      display: none !important;
+    }
+    #detailedView.is-full {
+      display: flex;
+      flex-flow: row wrap;
+      direction: ltr;
+      justify-content: flex-start;
+      align-content: flex-start;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 12px;
+      box-sizing: border-box;
+      overflow: auto;
+    }
+    #detailedView.is-full .compact-week-nav { display: none; }
+    #detailedView.is-full .forecast-day-card {
+      display: block;
+      margin: 0;
+      flex: 0 0 auto;
+      width: max-content;
+      max-width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--fc-panel);
+      box-shadow: 0 1px 0 rgba(0, 0, 0, 0.12);
+      overflow: visible;
+    }
+    /* Full grid: hourly rows only — drop blank + sub-hour meter slots. */
+    #detailedView.is-full tr.forecast-row-empty,
+    #detailedView.is-full tr.forecast-row-subhour { display: none; }
+    #detailedView.is-full .forecast-summary {
+      padding: 6px 8px 4px;
+      gap: 0;
+    }
+    #detailedView.is-full .forecast-summary small {
+      font-size: 12px;
+      letter-spacing: 0.03em;
+    }
+    #detailedView.is-full .forecast-summary h2,
+    #detailedView.is-full .forecast-summary p { display: none; }
+    #detailedView.is-full .flat-forecast-card { border-bottom: 0; }
+    #detailedView.is-full .table-wrap {
+      border-top: 0;
+      overflow: visible;
+      padding: 0;
+      margin: 0;
+    }
+    #detailedView.is-full table.forecast {
+      width: max-content;
+      min-width: 0;
+      table-layout: auto;
+      font-size: 12px;
+      font-weight: 600;
+      border-collapse: separate;
+      border-spacing: 0;
+    }
+    #detailedView.is-full table.forecast td,
+    #detailedView.is-full table.forecast th {
+      padding: 4px 5px;
+      width: auto;
+      min-width: 2.75em;
+      white-space: nowrap;
+      overflow: visible;
+      text-overflow: clip;
+      line-height: 1.25;
+      vertical-align: middle;
+      text-align: center;
+    }
+    #detailedView.is-full table.forecast thead th {
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      padding: 4px 5px;
+      max-width: 3.4em;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    #detailedView.is-full table.forecast thead th:first-child,
+    #detailedView.is-full table.forecast tbody th.time {
+      width: auto;
+      min-width: 3.2em;
+      max-width: none;
+      padding: 4px 6px 4px 8px;
+      font-size: 11px;
+      font-weight: 700;
+      text-align: left;
+    }
+    #detailedView.is-full table.forecast td .wind_arrow,
+    #detailedView.is-full table.forecast td.actual-col .wind_arrow {
+      display: block;
+      width: 11px;
+      height: 11px;
+      margin: 0 auto 2px;
+      flex-shrink: 0;
+    }
+    .spot-compact {
+      min-width: 0;
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 10px;
+    }
+    .compact-selected { min-width: 112px; padding: 0 4px 0 0; }
+    .compact-selected small {
+      display: block;
+      color: var(--fc-link);
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+    }
+    .compact-selected strong {
+      display: block;
+      margin-top: 2px;
+      font-size: 14px;
+      white-space: nowrap;
+      color: var(--text);
+    }
+    .spot-scroll {
+      display: flex;
+      justify-content: flex-start;
+      gap: 6px;
+      overflow-x: auto;
+      scrollbar-width: none;
+      -webkit-overflow-scrolling: touch;
+    }
+    .spot-scroll::-webkit-scrollbar { display: none; }
+    .expected-panel {
+      margin-bottom: 16px;
+      padding: 16px 18px 10px;
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      background: var(--fc-page-bg);
+      box-shadow: var(--shadow);
+    }
+    .expected-head h2 { margin: 0; font-size: 17px; color: var(--text); }
+    .expected-strongest { margin: 4px 0 0; font-size: 13px; color: var(--muted); }
+    .expected-strongest strong { color: var(--text); }
+    /* Reserve the chart's height so the page does not jump when it draws. */
+    .expected-chart { min-height: 250px; }
+    /* On a phone, 14 days in 330px leaves ~22px a day and the day labels collide.
+       Like the 14-day overview, the chart scrolls sideways instead. The bleed
+       margin lives here, not on the chart: on the chart it made it 12px wider
+       than this box, so it scrolled on desktop too. */
+    .expected-scroll { margin: 4px -6px 0; overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; }
+    .expected-note { margin: 2px 0 0; font-size: 12px; line-height: 1.5; color: var(--muted); }
+    .expected-tip { padding: 8px 10px; font-size: 12px; line-height: 1.55; }
+    .expected-tip b { display: block; margin-bottom: 2px; }
+    .expected-tip .muted { opacity: 0.7; }
+    .accuracy-table tr.acc-estimate th { color: var(--fc-link); }
+    .accuracy-panel {
+      /* Sized by the table, not the page: a six-column table stretched to 1400px
+         spreads each row too far to read across. */
+      width: fit-content;
+      max-width: 100%;
+      box-sizing: border-box;
+      margin-top: 16px;
+      padding: 16px 18px;
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      background: var(--fc-page-bg);
+      box-shadow: var(--shadow);
+    }
+    .accuracy-head h2 { margin: 0; font-size: 17px; color: var(--text); }
+    .accuracy-head p { margin: 4px 0 12px; font-size: 13px; color: var(--muted); }
+    /* Heading and footnote fill the panel but do not set its width — otherwise the
+       long footnote would stretch the panel back out to a full-width line. */
+    .accuracy-head, .accuracy-note { width: 0; min-width: 100%; }
+    .accuracy-scroll { overflow-x: auto; }
+    .accuracy-table {
+      border-collapse: collapse;
+      font-size: 13px;
+      font-variant-numeric: tabular-nums;
+    }
+    .accuracy-table th, .accuracy-table td {
+      padding: 7px 12px;
+      border-bottom: 1px solid var(--line);
+      text-align: right;
+      white-space: nowrap;
+      color: var(--text);
+    }
+    .accuracy-table th:first-child { text-align: left; }
+    [dir="rtl"] .accuracy-table th, [dir="rtl"] .accuracy-table td { text-align: left; }
+    [dir="rtl"] .accuracy-table th:first-child { text-align: right; }
+    .accuracy-table thead th {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      color: var(--fc-muted);
+      cursor: help;
+    }
+    .accuracy-table thead th:first-child { cursor: default; }
+    .accuracy-table tbody th { font-weight: 700; }
+    .accuracy-table tr.acc-best { background: var(--fc-chip-bg); }
+    .acc-badge {
+      margin-inline-start: 6px;
+      padding: 2px 7px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--on-accent);
+      background: linear-gradient(var(--fc-btn), var(--fc-btn-deep));
+      vertical-align: 1px;
+    }
+    .accuracy-table td.acc-over { color: var(--err); font-weight: 700; }
+    .accuracy-table td.acc-under { color: var(--fc-link); font-weight: 700; }
+    .accuracy-table td.acc-muted { color: var(--muted); }
+    .accuracy-note { margin: 12px 0 0; font-size: 12px; line-height: 1.5; color: var(--muted); }
+    .spot-chip {
+      flex: 0 0 auto;
+      border: 1px solid var(--line);
+      background: var(--fc-chip-bg);
+      color: var(--fc-chip-fg);
+      border-radius: 10px;
+      padding: 8px 11px;
+      font-size: 12px;
+      font-weight: 600;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+    .spot-chip:hover { color: var(--text); text-decoration: none; border-color: var(--fc-btn); }
+    .spot-chip.active {
+      color: var(--on-accent);
+      background: linear-gradient(var(--fc-btn), var(--fc-btn-deep));
+      border-color: var(--fc-btn);
+    }
+    .gear {
+      width: 38px;
+      height: 38px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--fc-spotbar);
+      color: var(--text);
+      font-size: 16px;
+      cursor: pointer;
+      padding: 0;
+    }
+    .workspace-actions { display: flex; gap: 7px; align-items: end; }
+    .date-range {
+      display: none;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: end;
+      justify-content: flex-end;
+    }
+    .date-range.is-open { display: flex; }
+    .date-range label {
+      display: block;
+      font-size: 10px;
+      color: var(--fc-note);
+      margin-bottom: 3px;
+    }
+    .date-range input {
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--fc-day-bg);
+      color: var(--text);
+      font: inherit;
+      font-size: 13px;
+      color-scheme: var(--color-scheme);
+    }
+    .date-range button {
+      padding: 9px 14px;
+      border: 0;
+      border-radius: 10px;
+      background: linear-gradient(180deg, var(--fc-btn), var(--fc-btn-deep));
+      color: var(--on-accent);
+      font: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .compact-overview-head {
+      min-height: 72px;
+      padding: 12px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 20px;
+    }
+    .overview-titleline {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+      min-width: 0;
+      flex-wrap: wrap;
+    }
+    .overview-titleline small {
+      color: var(--fc-link);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+    }
+    .overview-titleline h2 {
+      margin: 0;
+      font-size: 21px;
+      color: var(--text);
+      white-space: nowrap;
+    }
+    .overview-titleline p {
+      margin: 0;
+      font-size: 12px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    .overview-note { color: var(--fc-note); font-size: 12px; white-space: nowrap; }
+    .overview-wrap {
+      overflow: auto;
+      border-top: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+      -webkit-overflow-scrolling: touch;
+    }
+    .overview-table {
+      width: max-content;
+      min-width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      background: transparent;
+      color: var(--fc-strong);
+    }
+    .overview-table th,
+    .overview-table td {
+      min-width: 118px;
+      height: 68px;
+      text-align: center;
+      border-right: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+      padding: 8px;
+      background: var(--fc-cell-bg);
+    }
+    .overview-table thead th {
+      position: sticky;
+      top: 0;
+      z-index: 4;
+      background: var(--fc-cell-bg2);
       font-weight: 600;
     }
-    .wind18 { background-color: #ffe100; }
-    .wind16 { background-color: #cbff00; }
-    .wind14 { background-color: rgba(11,254,0,1); }
-    .wind10 { background-color: rgba(82,249,192,1); }
-    .wind8 { background-color: rgba(157,250,246,1); }
-    .wind_arrow { width: 14px; height: 14px; vertical-align: middle; }
-    .empty { color: var(--muted); margin: 24px 0; }
+    .overview-table .time-sticky {
+      position: sticky;
+      left: 0;
+      z-index: 6;
+      min-width: 78px;
+      background: var(--fc-cell-bg3);
+      font-weight: 700;
+      color: var(--fc-cell-fg);
+    }
+    .overview-table thead .time-sticky { z-index: 7; }
+    .overview-day {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      align-items: center;
+    }
+    .overview-day span { font-size: 11px; color: var(--fc-day-sub); }
+    .overview-day strong { font-size: 14px; color: var(--fc-white); }
+    .overview-day em {
+      font-style: normal;
+      color: var(--fc-good);
+      font-size: 11px;
+    }
+    .overview-table thead th[data-day-index],
+    .overview-table td[data-day-index] {
+      cursor: pointer;
+      transition: filter 0.16s ease, box-shadow 0.16s ease;
+    }
+    .overview-table thead th[data-day-index]:hover,
+    .overview-table td[data-day-index]:hover { filter: brightness(1.12); }
+    .overview-table thead th[data-day-index]:hover {
+      box-shadow: inset 0 -3px 0 var(--fc-accent-bar);
+    }
+    .overview-table .selected-overview-day {
+      box-shadow: inset 0 0 0 2px var(--fc-accent-ring);
+    }
+    .overview-cell {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+    }
+    .overview-cell strong { font-size: 15px; color: var(--fc-white); }
+    .overview-cell small { font-size: 10px; color: var(--fc-cell-small); }
+    .overview-cell .wind_arrow {
+      width: 14px;
+      height: 14px;
+      color: var(--fc-strong);
+    }
+    .overview-legend {
+      display: flex;
+      gap: 18px;
+      flex-wrap: wrap;
+      padding: 14px 18px;
+      color: var(--fc-muted);
+      font-size: 12px;
+    }
+    .overview-legend b { font-weight: 500; }
+    .overview-legend i {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      margin-right: 6px;
+    }
+    .overview-legend .l0 { background: #4c94df; }
+    .overview-legend .l1 { background: #2bbcb5; }
+    .overview-legend .l2 { background: #58ca65; }
+    .overview-legend .l3 { background: #e9b929; }
+    .overview-legend .l4 { background: #ef5842; }
+
+    .overview-table td.level0 { background: var(--wind8) !important; }
+    .overview-table td.level1 { background: var(--wind10) !important; }
+    .overview-table td.level2 { background: var(--wind14) !important; }
+    .overview-table td.level3 { background: var(--wind16) !important; }
+    .overview-table td.level4 { background: var(--wind18) !important; color: var(--fc-white); }
+
+    .compact-week-nav {
+      margin: 0;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 12px;
+      align-items: center;
+    }
+    .week-arrow {
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      border: 1px solid var(--line);
+      background: var(--fc-spotbar);
+      color: var(--text);
+      font-size: 29px;
+      line-height: 1;
+      cursor: pointer;
+    }
+    .days {
+      display: grid;
+      grid-auto-flow: column;
+      grid-auto-columns: minmax(110px, 1fr);
+      gap: 10px;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .days::-webkit-scrollbar { display: none; }
+    .day {
+      border: 1px solid var(--line);
+      background: var(--fc-spotbar);
+      color: var(--text);
+      text-align: left;
+      padding: 13px;
+      border-radius: 13px;
+      cursor: pointer;
+      font: inherit;
+    }
+    .day span,
+    .day strong { display: block; }
+    .day span { color: var(--fc-day-sub); font-size: 11px; }
+    .day strong { margin-top: 6px; font-size: 14px; color: var(--text); }
+    .day.active {
+      border-color: var(--fc-btn);
+      background: linear-gradient(var(--fc-btn), var(--fc-btn-deep));
+      color: var(--on-accent);
+    }
+    .day.active span,
+    .day.active strong { color: var(--on-accent); }
+
+    .flat-forecast-card { background: transparent; }
+    .forecast-summary {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      gap: 16px;
+      padding: 20px;
+    }
+    .forecast-summary small { color: var(--fc-link); font-weight: 700; letter-spacing: 0.04em; }
+    .forecast-summary h2 { font-size: 28px; margin: 5px 0; color: var(--text); }
+    .forecast-summary p { color: var(--muted); margin: 0; }
+
+    .table-wrap {
+      width: 100%;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      border-top: 1px solid var(--line);
+    }
+    table.forecast {
+      border-collapse: separate;
+      border-spacing: 0;
+      width: 100%;
+      min-width: 720px;
+      background: transparent;
+      font-size: 12px;
+      color: var(--fc-strong);
+    }
+    table.forecast td,
+    table.forecast th {
+      text-align: center;
+      padding: 6px 5px;
+      white-space: nowrap;
+      border-right: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+      color: var(--fc-strong);
+    }
+    table.forecast thead th {
+      position: sticky;
+      top: 0;
+      z-index: 4;
+      background: var(--fc-cell-bg2);
+      font-weight: 600;
+      color: var(--fc-strong);
+    }
+    table.forecast thead th.actual {
+      background: var(--surface-soft);
+      color: var(--fc-info-fg);
+    }
+    table.forecast thead th:first-child,
+    table.forecast tbody th.time {
+      width: 72px;
+      min-width: 72px;
+    }
+    table.forecast tbody th.time {
+      position: sticky;
+      left: 0;
+      z-index: 3;
+      background: var(--fc-cell-bg3);
+      font-weight: 700;
+      text-align: left;
+      padding-right: 10px;
+      color: var(--fc-cell-fg);
+    }
+    table.forecast td { background: var(--fc-cell-bg); }
+    table.forecast td.actual-col { background: var(--fc-cell-bg2); }
+    body.forecast-slot-details-on table.forecast td.actual-col.has-samples { cursor: help; }
+    table.forecast td.level0,
+    table.forecast td.wind8 { background: var(--wind8) !important; }
+    table.forecast td.level1,
+    table.forecast td.wind10 { background: var(--wind10) !important; }
+    table.forecast td.level2,
+    table.forecast td.wind14 { background: var(--wind14) !important; }
+    table.forecast td.level3,
+    table.forecast td.wind16 { background: var(--wind16) !important; }
+    table.forecast td.level4,
+    table.forecast td.wind18 { background: var(--wind18) !important; color: var(--fc-white); }
     table.forecast td.peak {
-      background: #e8f5e9;
-      border-color: #a5d6a7;
+      box-shadow: inset 0 0 0 1px rgba(114, 227, 122, 0.55);
       font-weight: 700;
     }
-    @media only screen and (max-width: 700px) {
-      .page.page-wide { padding-left: 8px; padding-right: 8px; }
-      table.forecast { font-size: 11px; }
-      table.forecast td, table.forecast th { padding: 3px 4px; }
+    .wind_arrow {
+      color: var(--fc-strong);
+    }
+    .empty { color: var(--muted); margin: 24px 0; text-align: center; }
+    .forecast-day-card[hidden] { display: none !important; }
+
+    .slot-detail-pop {
+      position: fixed;
+      z-index: 80;
+      display: none;
+      min-width: 120px;
+      max-width: 220px;
+      max-height: 280px;
+      overflow: auto;
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: var(--fc-pop);
+      color: var(--fc-white);
+      border: 1px solid var(--line);
+      font-size: 12px;
+      line-height: 1.35;
+      box-shadow: var(--shadow);
+      pointer-events: none;
+    }
+    .slot-detail-pop.is-open { display: block; }
+    .slot-detail-pop .slot-detail-title {
+      font-weight: 600;
+      margin-bottom: 6px;
+      opacity: 0.85;
+      font-size: 11px;
+    }
+    .slot-detail-pop table {
+      border-collapse: collapse;
+      width: 100%;
+      background: transparent;
+      min-width: 0;
+    }
+    .slot-detail-pop td {
+      padding: 2px 0;
+      white-space: nowrap;
+      vertical-align: middle;
+      background: transparent !important;
+      border: 0 !important;
+      color: var(--fc-white);
+    }
+    .slot-detail-pop td.t { padding-right: 10px; color: var(--fc-cell-fg); }
+    .slot-detail-pop .wind_arrow { width: 12px; height: 12px; color: var(--fc-white); }
+    thead [data-tip] { position: relative; cursor: help; }
+    thead [data-tip]:hover::after,
+    thead [data-tip]:focus-visible::after {
+      content: attr(data-tip);
+      position: absolute;
+      left: 50%;
+      bottom: calc(100% + 6px);
+      transform: translateX(-50%);
+      z-index: 30;
+      min-width: max-content;
+      max-width: 260px;
+      padding: 6px 8px;
+      border-radius: 6px;
+      background: var(--fc-pop);
+      color: var(--fc-white);
+      border: 1px solid var(--line);
+      font-size: 11px;
+      font-weight: 500;
+      line-height: 1.3;
+      white-space: normal;
+      text-align: center;
+      pointer-events: none;
+      box-shadow: var(--shadow);
+    }
+
+    @media (max-width: 1100px) {
+      .workspace-toolbar { grid-template-columns: auto 1fr; }
+      .workspace-actions {
+        grid-column: 1 / -1;
+        justify-self: end;
+      }
+    }
+    @media (max-width: 700px) {
+      .compact-page-head { margin-bottom: 10px; }
+      .compact-page-head h1 { font-size: 24px; }
+      .compact-page-head p { font-size: 12px; }
+      .forecast-workspace { border-radius: 16px; }
+      .workspace-toolbar {
+        min-height: 0;
+        grid-template-columns: 1fr auto;
+        gap: 8px;
+        padding: 9px;
+      }
+      .view-toggle {
+        grid-column: 1 / -1;
+        width: 100%;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+      }
+      .view-toggle button { padding: 8px 9px; font-size: 11px; }
+      .spot-compact {
+        grid-column: 1 / -1;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        gap: 6px;
+      }
+      .compact-selected { min-width: 82px; }
+      .compact-selected small { font-size: 8px; }
+      .compact-selected strong { font-size: 12px; }
+      .spot-chip { padding: 7px 9px; font-size: 10px; }
+      .gear { width: 34px; height: 34px; }
+      .workspace-actions { grid-column: 1 / -1; width: 100%; }
+      .date-range { width: 100%; }
+      .date-range > div { flex: 1; }
+      .date-range button { width: 100%; }
+      .compact-overview-head {
+        min-height: 58px;
+        padding: 10px 12px;
+        align-items: flex-start;
+        flex-direction: column;
+      }
+      .overview-note { display: none; }
+      .overview-titleline { display: grid; gap: 2px; }
+      .overview-titleline h2 { font-size: 17px; white-space: normal; }
+      .overview-titleline p { font-size: 10px; white-space: normal; }
+      .overview-table th,
+      .overview-table td { min-width: 88px; height: 60px; padding: 5px 3px; }
+      .overview-table .time-sticky { min-width: 58px; }
+      .overview-day strong { font-size: 12px; }
+      .overview-cell strong { font-size: 12px; }
+      .overview-cell small { font-size: 9px; }
+      .days { grid-auto-columns: 74px; }
+      .day { padding: 10px 8px; }
+      .day span { font-size: 9px; }
+      .day strong { font-size: 11px; }
+      .forecast-summary {
+        align-items: flex-start;
+        flex-direction: column;
+        padding: 15px;
+      }
+      .forecast-summary h2 { font-size: 22px; }
+      table.forecast { font-size: 10px; min-width: 560px; }
+      table.forecast td,
+      table.forecast th { padding: 4px 2px; }
+      .wind_arrow { width: 11px; height: 11px; }
+    }
+    @media (max-width: 280px) {
+      .compact-page-head h1 { font-size: 16px; }
+      .compact-selected { display: none; }
+      .overview-cell .wind_arrow { display: none; }
+      table.forecast { font-size: 8px; min-width: 0; width: 100%; table-layout: fixed; }
+      .wind_arrow { display: none; }
     }
   </style>
 </head>
 <body>
   {{template "nav" .}}
-  <main class="page page-wide">
-    <h1>Forecast</h1>
-    <p class="muted">{{.Date}} · {{.SpotName}}</p>
+  <main class="page page-wide forecast-page">
+    <section class="compact-page-head">
+      <h1>{{T "forecast.heading"}}</h1>
+      <p id="forecast-subtitle">{{T "forecast.subtitle" .SpotName}}</p>
+    </section>
 
-    <nav class="spot-picker" aria-label="Forecast spot">
-      {{range .SpotOptions}}
-      <a href="/forecast?spot={{.Key}}"{{if .Active}} class="active"{{end}}>{{.Name}}</a>
+    {{if .ExpectedChart}}
+    <section class="expected-panel" aria-labelledby="expected-title">
+      <div class="expected-head">
+        <h2 id="expected-title">{{T "forecast.est_title" .SpotName}}</h2>
+        {{with .Strongest}}
+        <p class="expected-strongest">{{T "forecast.est_strongest"}} <strong>{{.When}}</strong> · <strong><span dir="ltr">{{.Wind}} kt</span></strong> {{T "forecast.est_likely" .Low .High}} · {{T "forecast.est_gusts" .Gust}}{{if .Dir}} · <span dir="ltr">{{.Dir}}</span>{{end}}</p>
+        {{end}}
+      </div>
+      {{/* LTR on purpose: time runs left to right on every chart on the site. */}}
+      <div class="expected-scroll" dir="ltr"><div id="expectedChart" class="expected-chart"></div></div>
+      <p class="expected-note">{{T "forecast.est_note"}}{{with .Accuracy}}{{if .EstCoverage}} {{T "forecast.est_note_range" .EstCoverage}}{{end}}{{end}}</p>
+    </section>
+    {{end}}
+
+    <section class="forecast-workspace">
+      <div class="workspace-toolbar">
+        <div class="view-toggle workspace-tabs" role="tablist" aria-label="{{T "forecast.view_overview"}}">
+          <button type="button"{{if eq .View "overview"}} class="active"{{end}} data-view="overview" role="tab" aria-selected="{{if eq .View "overview"}}true{{else}}false{{end}}">{{T "forecast.view_overview"}}</button>
+          <button type="button"{{if eq .View "detailed"}} class="active"{{end}} data-view="detailed" role="tab" aria-selected="{{if eq .View "detailed"}}true{{else}}false{{end}}">{{T "forecast.view_detailed"}}</button>
+          <button type="button"{{if eq .View "full"}} class="active"{{end}} data-view="full" role="tab" aria-selected="{{if eq .View "full"}}true{{else}}false{{end}}">{{T "forecast.view_full"}}</button>
+        </div>
+
+        <div class="spot-compact">
+          <div class="selected-copy compact-selected">
+            <small>{{T "forecast.spot_label"}}</small>
+            <strong id="selectedSpotName">{{.SpotName}}</strong>
+          </div>
+          <nav class="spot-scroll" id="spotScroll" aria-label="{{T "forecast.spot_picker"}}">
+            {{range .SpotOptions}}
+            <a class="spot-chip{{if .Active}} active{{end}}" data-spot="{{.Key}}" href="/forecast?spot={{.Key}}&amp;from={{$.FromDate}}&amp;to={{$.ToDate}}">{{.Name}}</a>
+            {{end}}
+          </nav>
+          <button type="button" class="gear" id="manageDatesBtn" aria-label="{{T "forecast.manage_dates"}}" title="{{T "forecast.manage_dates"}}">⚙</button>
+        </div>
+
+        <div class="workspace-actions">
+          <form class="date-range" id="dateRangeForm" method="get" action="/forecast" aria-label="{{T "forecast.date_range"}}">
+            <input type="hidden" name="spot" value="{{.Spot}}" />
+            <div>
+              <label for="forecast-from">{{T "forecast.from"}}</label>
+              <input id="forecast-from" name="from" type="date" value="{{.FromDate}}" />
+            </div>
+            <div>
+              <label for="forecast-to">{{T "forecast.to"}}</label>
+              <input id="forecast-to" name="to" type="date" value="{{.ToDate}}" max="{{.MaxDate}}" />
+            </div>
+            <button type="submit">{{T "forecast.apply"}}</button>
+          </form>
+        </div>
+      </div>
+
+      {{if not .HasData}}
+      <p class="empty">{{T "forecast.empty" .SpotName}}</p>
+      {{else}}
+      <section id="overviewView"{{if ne .View "overview"}} hidden{{end}}>
+        <div class="overview-head compact-overview-head">
+          <div class="overview-titleline">
+            <small>{{T "forecast.overview_eyebrow"}}</small>
+            <h2>{{T "forecast.overview_title"}}</h2>
+            <p>{{T "forecast.overview_help"}}</p>
+          </div>
+          <div class="overview-note">{{T "forecast.overview_scroll"}}</div>
+        </div>
+        <div class="overview-wrap">
+          <table class="overview-table">
+            <thead>
+              <tr>
+                <th class="time-sticky">{{T "forecast.time"}}</th>
+                {{range $i, $day := .Overview}}
+                <th data-day-index="{{$i}}" data-date="{{$day.Date}}">
+                  <div class="overview-day">
+                    <span>{{$day.Weekday}}</span>
+                    <strong>{{$day.DayLabel}}</strong>
+                    <em>{{T "forecast.rating_label" $day.Rating}}</em>
+                  </div>
+                </th>
+                {{end}}
+              </tr>
+            </thead>
+            <tbody>
+              {{range $hi, $hour := .OverviewHours}}
+              <tr>
+                <td class="time-sticky">{{$hour}}</td>
+                {{range $di, $day := $.Overview}}
+                  {{with index $day.Cells $hi}}
+                    {{if .Empty}}
+                    <td data-day-index="{{$di}}" data-date="{{$day.Date}}"></td>
+                    {{else}}
+                    <td data-day-index="{{$di}}" data-date="{{$day.Date}}"{{if .CSS}} class="{{.CSS}}"{{end}}>
+                      <div class="overview-cell">
+                        {{if .WindDir}}{{template "wind_arrow" (printf "%.0f" .WindDir)}}{{end}}
+                        <strong>{{printf "%.0f" .Wind}}-{{printf "%.0f" .Gust}}</strong>
+                      </div>
+                    </td>
+                    {{end}}
+                  {{end}}
+                {{end}}
+              </tr>
+              {{end}}
+            </tbody>
+          </table>
+        </div>
+        <div class="overview-legend">
+          <span>{{T "forecast.wind_strength"}}</span>
+          <b><i class="l0"></i>0–6</b>
+          <b><i class="l1"></i>6–10</b>
+          <b><i class="l2"></i>10–14</b>
+          <b><i class="l3"></i>14–18</b>
+          <b><i class="l4"></i>18+</b>
+        </div>
+      </section>
+
+      <section id="detailedView"{{if eq .View "overview"}} hidden{{end}}{{if eq .View "full"}} class="is-full"{{end}}>
+        <section class="week-nav compact-week-nav">
+          <button type="button" class="week-arrow" id="prevDay" aria-label="Previous day">‹</button>
+          <div class="days" id="days">
+            {{range $i, $day := .Overview}}
+            <button type="button" class="day{{if eq $i 0}} active{{end}}" data-day-index="{{$i}}" data-date="{{$day.Date}}">
+              <span>{{$day.Weekday}}</span>
+              <strong>{{$day.DayLabel}}</strong>
+            </button>
+            {{end}}
+          </div>
+          <button type="button" class="week-arrow" id="nextDay" aria-label="Next day">›</button>
+        </section>
+
+        {{range $i, $day := .DayCards}}
+        <article class="forecast-day-card flat-forecast-card" data-day-index="{{$i}}" data-date="{{$day.Date}}"{{if ne $i 0}} hidden{{end}}>
+          <div class="forecast-summary">
+            <div>
+              <small>{{$day.DayLabel}}</small>
+              <h2>{{T "forecast.daily_title"}}</h2>
+              <p>{{$.SpotName}}</p>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table class="forecast">
+              <thead>
+                <tr>
+                  <th>{{T "forecast.time"}}</th>
+                  {{range $day.ActualCols}}
+                  <th class="actual" data-tip="{{.Title}}" title="{{.Title}}">{{.Label}}</th>
+                  {{end}}
+                  {{range $day.ModelCols}}
+                  <th data-tip="{{.Title}}" title="{{.Title}}">{{.Label}}</th>
+                  {{end}}
+                </tr>
+              </thead>
+              <tbody>
+                {{range $day.Rows}}
+                <tr class="{{if not .HasData}}forecast-row-empty{{end}}{{if not .IsHourly}} forecast-row-subhour{{end}}">
+                  <th class="time">{{.TimeLabel}}</th>
+                  {{range .Actuals}}
+                    {{if .Empty}}
+                    <td class="actual-col"></td>
+                    {{else}}
+                    <td class="actual-col{{if .Samples}} has-samples{{end}}{{if .CSS}} {{.CSS}}{{end}}">
+                      {{template "wind_arrow" (printf "%.0f" .WindDir)}}
+                      {{printf "%.0f" .Wind}}-{{printf "%.0f" .Gust}}
+                      {{if .Samples}}
+                      <template class="slot-samples">
+                        <div class="slot-detail-title">{{T "forecast.slot_detail_title"}}</div>
+                        <table>
+                          {{range .Samples}}
+                          <tr>
+                            <td class="t">{{.TimeLabel}}</td>
+                            <td>
+                              {{template "wind_arrow" (printf "%.0f" .WindDir)}}
+                              {{printf "%.0f" .Wind}}-{{printf "%.0f" .Gust}}
+                            </td>
+                          </tr>
+                          {{end}}
+                        </table>
+                      </template>
+                      {{end}}
+                    </td>
+                    {{end}}
+                  {{end}}
+                  {{range .Cells}}
+                    {{if .Empty}}
+                    <td></td>
+                    {{else}}
+                    <td{{if .CSS}} class="{{.CSS}}"{{end}}>
+                      {{template "wind_arrow" (printf "%.0f" .WindDir)}}
+                      {{printf "%.0f" .Wind}}-{{printf "%.0f" .Gust}}
+                    </td>
+                    {{end}}
+                  {{end}}
+                </tr>
+                {{end}}
+              </tbody>
+            </table>
+          </div>
+        </article>
+        {{end}}
+      </section>
       {{end}}
-    </nav>
+    </section>
 
-    {{if not .HasData}}
-    <p class="empty">No forecast data for {{.SpotName}} yet.</p>
-    {{else}}
-    <section class="forecast-spot">
-      <div class="table-wrap">
-        <table class="forecast">
+    {{with .Accuracy}}
+    <section class="accuracy-panel" aria-labelledby="accuracy-title">
+      <div class="accuracy-head">
+        <h2 id="accuracy-title">{{T "forecast.acc_title" $.SpotName}}</h2>
+        <p>{{T "forecast.acc_sub" .Days .FromHour .ToHour}}</p>
+      </div>
+      <div class="accuracy-scroll">
+        <table class="accuracy-table">
           <thead>
             <tr>
-              <th></th>
-              {{range .Models}}
-              <th>{{.}}</th>
-              {{end}}
+              <th scope="col">{{T "forecast.acc_model"}}</th>
+              <th scope="col" title="{{T "forecast.acc_wind_err_help"}}">{{T "forecast.acc_wind_err"}}</th>
+              <th scope="col" title="{{T "forecast.acc_bias_help"}}">{{T "forecast.acc_wind_bias"}}</th>
+              <th scope="col" title="{{T "forecast.acc_gust_help"}}">{{T "forecast.acc_gust_bias"}}</th>
+              <th scope="col" title="{{T "forecast.acc_ratio_help"}}">{{T "forecast.acc_gust_factor"}}</th>
+              <th scope="col">{{T "forecast.acc_hours"}}</th>
             </tr>
           </thead>
           <tbody>
             {{range .Rows}}
-            <tr>
-              <td{{if .Peak}} class="peak"{{end}}>{{.Time}}</td>
-              {{range .Cells}}
-                {{if .Empty}}
-                <td></td>
-                {{else}}
-                <td{{if .CSS}} class="{{.CSS}}"{{end}}>
-                  <svg class="wind_arrow" version="1.1" viewBox="0 0 100 100"><g transform="rotate({{.WindDir}},50,50) translate(0,5)"><path d="m50,0 -20,30 16,-3 -3,63 14,0 -3,-63 16,3 -20,-30z" fill="black" stroke-width="0"></path></g></svg>
-                  {{printf "%.0f" .Wind}}-{{printf "%.0f" .Gust}}
-                </td>
-                {{end}}
-              {{end}}
+            <tr class="{{if .Best}}acc-best{{end}}{{if .IsEstimate}} acc-estimate{{end}}">
+              <th scope="row">{{if .IsEstimate}}{{T "forecast.est_name"}}{{else}}{{.Model}}{{end}}{{if .Best}} <span class="acc-badge">{{T "forecast.acc_best"}}</span>{{end}}</th>
+              {{/* dir="ltr" isolates each value: in Hebrew the bidi algorithm would
+                   otherwise move the neutral +, − and × to the wrong side ("5.5+"). */}}
+              <td><span dir="ltr">{{.WindErr}}</span></td>
+              <td class="{{.BiasClass}}"><span dir="ltr">{{.WindBias}}</span></td>
+              <td class="{{.GustClass}}"><span dir="ltr">{{.GustBias}}</span></td>
+              <td><span dir="ltr">{{.GustRatio}}</span></td>
+              <td class="acc-muted">{{.Hours}}</td>
             </tr>
             {{end}}
           </tbody>
         </table>
       </div>
+      <p class="accuracy-note">
+        {{if .ObsGustRatio}}{{T "forecast.acc_obs_factor" .ObsGustRatio}} {{end}}{{T "forecast.acc_help"}}
+      </p>
     </section>
     {{end}}
   </main>
+  <div id="slot-detail-pop" class="slot-detail-pop" hidden></div>
+  <script src="/static/prefs-layout.js?v=7"></script>
+  <script>
+    // The server renders a chip for every spot saved to the DB. Narrow that to the
+    // spots this viewer picked on /prefs, in their chosen order — the same
+    // localStorage prefs that drive the live-wind table's columns.
+    (function () {
+      var nav = document.getElementById('spotScroll');
+      if (!nav || !window.IkitePrefs) return;
+
+      var spots = {{.CollectSpotDefaults}};
+      // No saveOnMigrate here: /prefs and the index page own the stored layout.
+      // This page only reads it.
+      var prefs = IkitePrefs.mergeCollectLayout(spots);
+      var order = IkitePrefs.displayOrder(spots, prefs);
+
+      var chips = {};
+      nav.querySelectorAll('.spot-chip').forEach(function (chip) {
+        chips[chip.getAttribute('data-spot')] = chip;
+      });
+
+      var shown = [];
+      order.forEach(function (key) {
+        // Skip the ky-ims / kh-ims pseudo-columns: they are table columns on the
+        // live-wind page, not spots a forecast is produced for.
+        if (chips[key]) shown.push(chips[key]);
+      });
+
+      // Always keep the spot being viewed, even if it is hidden in prefs —
+      // otherwise the page shows a forecast with no chip to match it.
+      var active = nav.querySelector('.spot-chip.active');
+      if (active && shown.indexOf(active) === -1) shown.unshift(active);
+      if (!shown.length) return;
+
+      nav.querySelectorAll('.spot-chip').forEach(function (chip) {
+        if (shown.indexOf(chip) === -1) chip.remove();
+      });
+      shown.forEach(function (chip) { nav.appendChild(chip); });
+    })();
+  </script>
+  <script>
+    (function () {
+      var fromEl = document.getElementById('forecast-from');
+      var toEl = document.getElementById('forecast-to');
+      var today = '{{.Today}}';
+      var maxDate = '{{.MaxDate}}';
+      var selectedDay = 0;
+      var dayCount = {{len .Overview}};
+
+      function addDays(iso, days) {
+        var p = iso.split('-');
+        var d = new Date(Date.UTC(+p[0], +p[1] - 1, +p[2]));
+        d.setUTCDate(d.getUTCDate() + days);
+        var y = d.getUTCFullYear();
+        var m = String(d.getUTCMonth() + 1).padStart(2, '0');
+        var day = String(d.getUTCDate()).padStart(2, '0');
+        return y + '-' + m + '-' + day;
+      }
+
+      function clampToMax(iso) {
+        if (maxDate && iso > maxDate) return maxDate;
+        return iso;
+      }
+
+      if (fromEl && toEl) {
+        fromEl.addEventListener('change', function () {
+          var from = fromEl.value;
+          if (!from) return;
+          if (from === today) {
+            toEl.value = maxDate || from;
+            return;
+          }
+          toEl.value = clampToMax(addDays(from, 10));
+        });
+      }
+
+      var manageBtn = document.getElementById('manageDatesBtn');
+      var dateForm = document.getElementById('dateRangeForm');
+      if (manageBtn && dateForm) {
+        manageBtn.addEventListener('click', function () {
+          dateForm.classList.toggle('is-open');
+        });
+      }
+
+      function setView(view) {
+        document.querySelectorAll('[data-view]').forEach(function (b) {
+          var active = b.getAttribute('data-view') === view;
+          b.classList.toggle('active', active);
+          b.setAttribute('aria-selected', active ? 'true' : 'false');
+        });
+        var overview = document.getElementById('overviewView');
+        var detailed = document.getElementById('detailedView');
+        if (overview) overview.hidden = view !== 'overview';
+        if (detailed) {
+          detailed.hidden = view !== 'detailed' && view !== 'full';
+          detailed.classList.toggle('is-full', view === 'full');
+          if (view === 'full') {
+            document.querySelectorAll('.forecast-day-card').forEach(function (card) {
+              card.hidden = false;
+            });
+          } else if (view === 'detailed') {
+            selectDay(selectedDay);
+          }
+        }
+      }
+
+      document.querySelectorAll('[data-view]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var view = btn.getAttribute('data-view');
+          setView(view);
+          // Read server-side on the next load, so switching spots keeps this view.
+          document.cookie = 'ikite_fc_view=' + view + '; path=/; max-age=31536000; samesite=lax';
+        });
+      });
+
+      function selectDay(index) {
+        if (!dayCount) return;
+        selectedDay = Math.max(0, Math.min(dayCount - 1, Number(index) || 0));
+        document.querySelectorAll('#days .day').forEach(function (b) {
+          b.classList.toggle('active', Number(b.getAttribute('data-day-index')) === selectedDay);
+        });
+        document.querySelectorAll('.forecast-day-card').forEach(function (card) {
+          card.hidden = Number(card.getAttribute('data-day-index')) !== selectedDay;
+        });
+        document.querySelectorAll('.overview-table [data-day-index]').forEach(function (el) {
+          el.classList.toggle('selected-overview-day', Number(el.getAttribute('data-day-index')) === selectedDay);
+        });
+      }
+
+      function openDetailedDay(index) {
+        selectDay(index);
+        setView('detailed');
+        requestAnimationFrame(function () {
+          var activeDay = document.querySelector('#days .day.active');
+          if (activeDay) activeDay.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+          var detailed = document.getElementById('detailedView');
+          if (detailed) detailed.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+      }
+
+      var overviewView = document.getElementById('overviewView');
+      if (overviewView) {
+        overviewView.addEventListener('click', function (e) {
+          var target = e.target.closest('[data-day-index]');
+          if (!target) return;
+          e.preventDefault();
+          openDetailedDay(target.getAttribute('data-day-index'));
+        });
+      }
+
+      document.querySelectorAll('#days .day').forEach(function (b) {
+        b.addEventListener('click', function () {
+          selectDay(b.getAttribute('data-day-index'));
+        });
+      });
+
+      var prev = document.getElementById('prevDay');
+      var next = document.getElementById('nextDay');
+      if (prev) prev.addEventListener('click', function () { selectDay(selectedDay - 1); });
+      if (next) next.addEventListener('click', function () { selectDay(selectedDay + 1); });
+
+      function slotDetailsEnabled() {
+        var prefs = (window.IkitePrefs && IkitePrefs.loadPrefs()) || {};
+        return prefs.forecastSlotDetails !== false;
+      }
+
+      function applySlotDetailsPref() {
+        document.body.classList.toggle('forecast-slot-details-on', slotDetailsEnabled());
+      }
+
+      var pop = document.getElementById('slot-detail-pop');
+      var hideTimer = null;
+
+      function hidePop() {
+        if (!pop) return;
+        pop.classList.remove('is-open');
+        pop.hidden = true;
+        pop.innerHTML = '';
+      }
+
+      function showPop(td) {
+        if (!pop || !slotDetailsEnabled()) return;
+        var tpl = td.querySelector('template.slot-samples');
+        if (!tpl) return;
+        pop.innerHTML = tpl.innerHTML;
+        pop.hidden = false;
+        pop.classList.add('is-open');
+        var rect = td.getBoundingClientRect();
+        var pad = 8;
+        var left = rect.left + rect.width / 2 - pop.offsetWidth / 2;
+        var top = rect.top - pop.offsetHeight - pad;
+        if (top < pad) top = rect.bottom + pad;
+        if (left < pad) left = pad;
+        if (left + pop.offsetWidth > window.innerWidth - pad) {
+          left = window.innerWidth - pop.offsetWidth - pad;
+        }
+        pop.style.left = Math.round(left) + 'px';
+        pop.style.top = Math.round(top) + 'px';
+      }
+
+      document.querySelectorAll('td.actual-col.has-samples').forEach(function (td) {
+        td.addEventListener('mouseenter', function () {
+          if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
+          showPop(td);
+        });
+        td.addEventListener('mouseleave', function () {
+          hideTimer = setTimeout(hidePop, 80);
+        });
+      });
+      window.addEventListener('scroll', hidePop, true);
+      window.addEventListener('resize', hidePop);
+
+      applySlotDetailsPref();
+      selectDay(0);
+      setView('{{.View}}');
+    })();
+  </script>
+  {{if .ExpectedChart}}
+  <script src="https://cdn.jsdelivr.net/npm/apexcharts@7.6.1" defer></script>
+  <script>
+    // Deferred scripts run before DOMContentLoaded, so ApexCharts is ready here.
+    document.addEventListener('DOMContentLoaded', function () {
+      var el = document.getElementById('expectedChart');
+      if (!el || !window.ApexCharts) return;
+      var data = {{.ExpectedChart}};
+      var L = {
+        range: {{T "forecast.est_range"}},
+        wind: {{T "forecast.est_wind"}},
+        gust: {{T "forecast.est_gust"}},
+        measured: {{T "forecast.est_measured"}},
+        fromModels: {{T "forecast.est_from_models"}}
+      };
+      var css = getComputedStyle(document.documentElement);
+      function v(name, fallback) { return (css.getPropertyValue(name) || '').trim() || fallback; }
+      var light = document.documentElement.getAttribute('data-theme') === 'light';
+      var blue = v('--fc-btn', '#3b82f6');
+      var line = v('--line', '#2a3441');
+      var muted = v('--muted', '#8b949e');
+      var green = v('--ok', '#22c55e');
+      var amber = '#f59e0b';
+
+      // Only hours with a value. Beyond ~5 days most models step every 3 hours,
+      // so the hours in between are empty; leaving them as nulls broke each line
+      // into isolated dots. Skipping them lets the line join the points it has.
+      function series(key) {
+        var out = [];
+        data.points.forEach(function (p, i) { if (p[key] != null) out.push({ x: i, y: p[key] }); });
+        return out;
+      }
+      // The range series only carries hours that have an estimate.
+      var range = [];
+      data.points.forEach(function (p, i) {
+        if (p.low != null && p.high != null) range.push({ x: i, y: [p.low, p.high] });
+      });
+      var hasMeasured = data.points.some(function (p) { return p.measured != null; });
+      // Enough width per day for its label; no effect where the screen is wider.
+      el.style.minWidth = (data.days.length * 52) + 'px';
+
+      var sets = [
+        { type: 'rangeArea', name: L.range, data: range },
+        { type: 'line', name: L.wind, data: series('wind') },
+        { type: 'line', name: L.gust, data: series('gust') }
+      ];
+      var colors = [blue, blue, amber];
+      var widths = [0, 2.5, 1.5];
+      var dashes = [0, 0, 5];
+      if (hasMeasured) {
+        sets.push({ type: 'line', name: L.measured, data: series('measured') });
+        colors.push(green); widths.push(2); dashes.push(0);
+      }
+
+      var annotations = [];
+      data.days.forEach(function (d, i) {
+        if (i > 0) annotations.push({ x: d.first - 0.5, borderColor: line, strokeDashArray: 3 });
+        annotations.push({
+          x: d.mid, borderColor: 'transparent',
+          label: { text: d.label, position: 'top', orientation: 'horizontal', offsetY: -6,
+                   borderWidth: 0, style: { background: 'transparent', color: muted, fontSize: '11px', fontWeight: 600 } }
+        });
+      });
+
+      function fmt(x) { return x == null ? '–' : Math.round(x); }
+
+      new ApexCharts(el, {
+        chart: {
+          type: 'rangeArea', height: 250, background: 'transparent', foreColor: muted,
+          fontFamily: 'inherit', toolbar: { show: false }, zoom: { enabled: false }, animations: { enabled: false }
+        },
+        theme: { mode: light ? 'light' : 'dark' },
+        series: sets,
+        colors: colors,
+        fill: { opacity: [0.22, 1, 1, 1] },
+        stroke: { curve: 'monotoneCubic', width: widths, dashArray: dashes },
+        markers: { size: 0, hover: { size: 3 } },
+        dataLabels: { enabled: false },
+        grid: { borderColor: line, strokeDashArray: 3, padding: { top: 14, left: 6, right: 6 } },
+        xaxis: {
+          type: 'numeric', min: 0, max: data.points.length - 1, tickAmount: data.days.length,
+          labels: { show: false }, axisTicks: { show: false }, axisBorder: { show: false }, tooltip: { enabled: false }
+        },
+        yaxis: { min: 0, forceNiceScale: true, labels: { formatter: function (y) { return Math.round(y) + ' kt'; } } },
+        annotations: { xaxis: annotations },
+        legend: { position: 'top', horizontalAlign: 'left', fontSize: '12px', markers: { size: 6 } },
+        tooltip: {
+          shared: true, intersect: false, theme: light ? 'light' : 'dark',
+          custom: function (o) {
+            // Resolve the hovered hour from its x value, not the index: the range
+            // series skips hours without an estimate, so indexes differ by series.
+            var x = o.w.globals.seriesX[o.seriesIndex][o.dataPointIndex];
+            var p = data.points[Math.round(x)];
+            if (!p) return '';
+            var h = '<div class="expected-tip"><b>' + p.label + '</b>';
+            if (p.wind != null) {
+              h += L.wind + ': <b style="display:inline">' + fmt(p.wind) + ' kt</b> (' + fmt(p.low) + '–' + fmt(p.high) + ')<br>';
+              h += L.gust + ': ' + fmt(p.gust) + ' kt' + (p.dir ? ' · ' + p.dir : '') + '<br>';
+            }
+            if (p.measured != null) h += L.measured + ': ' + fmt(p.measured) + ' kt<br>';
+            if (p.models) h += '<span class="muted">' + L.fromModels.replace('%d', p.models) + '</span>';
+            return h + '</div>';
+          }
+        }
+      }).render();
+    });
+  </script>
+  {{end}}
 </body>
 </html>

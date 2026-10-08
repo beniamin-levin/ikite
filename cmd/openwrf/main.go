@@ -9,6 +9,7 @@ import (
 	"github.com/ben/ikite-go/internal/collector"
 	"github.com/ben/ikite-go/internal/config"
 	"github.com/ben/ikite-go/internal/db"
+	"github.com/ben/ikite-go/internal/notify/telegram"
 	"github.com/ben/ikite-go/internal/sources/openwrf"
 	"github.com/ben/ikite-go/internal/store"
 )
@@ -32,12 +33,25 @@ func main() {
 	}
 	defer sqlDB.Close()
 
-	svc := &collector.OpenWRFForecastService{
-		Cfg:     cfg,
-		Store:   store.New(sqlDB),
-		OpenWRF: openwrf.New(cfg.OpenWRFPDFURL),
-		Log:     log,
+	st := store.New(sqlDB)
+	notify := &collector.ForecastGustNotifyService{
+		Cfg:      cfg,
+		Store:    st,
+		Telegram: telegram.New(cfg.TelegramAlertToken, cfg.TelegramAlertChatID),
+		Log:      log,
 	}
+	svc := &collector.OpenWRFForecastService{
+		Cfg:   cfg,
+		Store: st,
+		Log:   log,
+		Notify: notify,
+	}
+	openwrfClient, err := openwrf.New(cfg.OpenWRFPDFURL, cfg.OpenWRFDriveURL)
+	if err != nil {
+		log.Error("openWRF client", "err", err)
+		os.Exit(1)
+	}
+	svc.OpenWRF = openwrfClient
 	if err := svc.Run(time.Now(), collector.OpenWRFForecastOptions{Force: *force}); err != nil {
 		log.Error("openWRF forecast failed", "err", err)
 		os.Exit(1)

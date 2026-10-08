@@ -1,0 +1,63 @@
+// Code generated from RainViewer's colour table
+// (https://www.rainviewer.com/files/rainviewer_api_colors_table.csv,
+// "Universal Blue" column, rain rows up to 65 dBZ) — the only scheme the public API still serves.
+// DO NOT EDIT by hand.
+
+package squall
+
+// universalBlue maps an opaque Universal Blue pixel (0xRRGGBB) to its dBZ. Only
+// opaque colours are listed: they start at 15 dBZ; the translucent shades
+// below that are drizzle and are read as "no rain" here.
+var universalBlue = map[uint32]int{
+	0x88ddee: 15,
+	0x6cd1eb: 16,
+	0x51c5e8: 17,
+	0x36bae5: 18,
+	0x1baee2: 19,
+	0x00a3e0: 20,
+	0x009ad5: 21,
+	0x0091ca: 22,
+	0x0088bf: 23,
+	0x007fb4: 24,
+	0x0077aa: 25,
+	0x0070a3: 26,
+	0x00699c: 27,
+	0x006295: 28,
+	0x005b8e: 29,
+	0x005588: 30,
+	0x005180: 31,
+	0x004e78: 32,
+	0x004a70: 33,
+	0x004768: 34,
+	0xffee00: 35,
+	0xffe000: 36,
+	0xffd200: 37,
+	0xffc500: 38,
+	0xffb700: 39,
+	0xffaa00: 40,
+	0xff9f00: 41,
+	0xff9500: 42,
+	0xff8b00: 43,
+	0xff8100: 44,
+	0xff4400: 45,
+	0xf23600: 46,
+	0xe62800: 47,
+	0xd91b00: 48,
+	0xcd0d00: 49,
+	0xc10000: 50,
+	0xa80000: 51,
+	0x8f0000: 52,
+	0x760000: 53,
+	0x5d0000: 54,
+	0xffaaff: 55,
+	0xff9fff: 56,
+	0xff95ff: 57,
+	0xff8bff: 58,
+	0xff81ff: 59,
+	0xff77ff: 60,
+	0xff6cff: 61,
+	0xff62ff: 62,
+	0xff58ff: 63,
+	0xff4eff: 64,
+	0xffffff: 65,
+}

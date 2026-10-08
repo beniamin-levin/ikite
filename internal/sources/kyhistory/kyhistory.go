@@ -3,6 +3,7 @@ package kyhistory
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 	"time"
@@ -16,6 +17,15 @@ const userAgent = "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTM
 type Client struct {
 	Proxy       *begetproxy.Client
 	UpstreamURL string
+	// Log is optional; when set the client reports which surfo path served the
+	// readings, which is the only way to tell a fallback apart from a healthy feed.
+	Log *slog.Logger
+}
+
+func (c *Client) logf(msg string, args ...any) {
+	if c.Log != nil {
+		c.Log.Warn(msg, args...)
+	}
 }
 
 func New(proxy *begetproxy.Client, upstreamURL string) *Client {
@@ -62,6 +72,7 @@ func (c *Client) Fetch(now time.Time) ([]models.WindReading, AlertStats, error) 
 	if err != nil {
 		return nil, AlertStats{}, err
 	}
+	rows = c.mergeWindtable(rows, now)
 
 	stats := alertStatsFromRows(rows)
 	return rows, stats, nil

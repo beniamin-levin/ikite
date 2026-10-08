@@ -1,16 +1,16 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{lang}}" dir="{{dir}}" data-theme="{{theme}}">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ikite — Wind Graph</title>
+  <title>{{T "title.graph"}}</title>
   {{template "head_common" .}}
   <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
 </head>
 <body>
   {{template "nav" .}}
   <main class="page">
-    <h1>Wind graph</h1>
+    <h1>{{T "graph.heading"}}</h1>
     <div class="card" id="chart"></div>
   </main>
   <script id="graph-data" type="application/json">
@@ -22,21 +22,26 @@
   </script>
   <script>
     const raw = JSON.parse(document.getElementById('graph-data').textContent);
+    const light = document.documentElement.getAttribute('data-theme') === 'light';
     const options = {
       series: raw.locs.map(name => ({ name, data: raw.series[name] || [] })),
       chart: {
         type: 'area',
         stacked: false,
         height: 420,
+        background: 'transparent',
+        foreColor: light ? '#334155' : '#c5d4dd',
         zoom: { type: 'x', enabled: true, autoScaleYaxis: true },
         toolbar: { autoSelected: 'zoom' }
       },
+      theme: { mode: light ? 'light' : 'dark' },
+      grid: { borderColor: light ? 'rgba(15,50,75,0.12)' : 'rgba(170,205,225,0.13)' },
       dataLabels: { enabled: false },
       markers: { size: 0 },
       fill: { type: 'gradient', gradient: { shadeIntensity: 1, inverseColors: false, opacityFrom: 0.45, opacityTo: 0.05 } },
-      yaxis: { title: { text: 'Wind (kt)' }, labels: { formatter: v => Math.round(v) } },
+      yaxis: { title: { text: '{{T "graph.wind_axis"}}' }, labels: { formatter: v => Math.round(v) } },
       xaxis: { type: 'datetime' },
-      tooltip: { shared: true, y: { formatter: v => (v == null ? '' : Math.round(v) + ' kt') } }
+      tooltip: { theme: light ? 'light' : 'dark', shared: true, y: { formatter: v => (v == null ? '' : Math.round(v) + '{{T "graph.tooltip_kt"}}') } }
     };
     new ApexCharts(document.querySelector('#chart'), options).render();
   </script>

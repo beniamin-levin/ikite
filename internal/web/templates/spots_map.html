@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{lang}}" dir="{{dir}}" data-theme="{{theme}}">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ikite — Spot Ratings Map</title>
+  <title>{{T "title.map"}}</title>
   {{template "head_common" .}}
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -19,9 +19,11 @@
       display: flex; flex-wrap: wrap; gap: 8px; align-items: end;
       margin: 0 0 0 auto; padding: 0; border: 0;
     }
+    html[dir="rtl"] .filters { margin: 0 auto 0 0; }
     .filters label { display: block; font-size: 0.7rem; color: var(--muted); margin-bottom: 2px; }
     .filters input, .filters select, .filters button {
       padding: 5px 8px; border: 1px solid var(--line); border-radius: 8px; font: inherit; font-size: 0.85rem;
+      background: var(--input-bg); color: var(--text); color-scheme: var(--color-scheme);
     }
     .filters input { width: 5.5rem; }
     .filters select { max-width: 11rem; }
@@ -35,7 +37,7 @@
       border-radius: 12px; border: 1px solid var(--line);
     }
     @media only screen and (max-width: 700px) {
-      .filters { margin-left: 0; }
+      .filters { margin-left: 0; margin-right: 0; }
       #map { height: calc(100dvh - var(--nav-h, 52px) - 170px); min-height: 320px; }
     }
   </style>
@@ -44,37 +46,39 @@
   {{template "nav" .}}
   <main class="page page-wide map-main">
     <div class="map-top">
-      <h1>Kitesurfing spots</h1>
-      <p class="muted">{{.Count}} shown · colored by score rank</p>
+      <h1>{{T "map.heading"}}</h1>
+      <p class="muted">{{T "map.subtitle" .Count}}</p>
       <form class="filters" method="get" action="/spots/map">
         <div>
-          <label for="limit">Limit</label>
+          <label for="limit">{{T "map.limit"}}</label>
           <input id="limit" name="limit" type="number" min="1" max="5000" value="{{.Limit}}" />
         </div>
         <div>
-          <label for="country">Country</label>
+          <label for="country">{{T "map.country"}}</label>
           <select id="country" name="country">
-            <option value="">Show all</option>
+            <option value="">{{T "map.show_all"}}</option>
             {{range .Countries}}
             <option value="{{.}}"{{if eq $.Country .}} selected{{end}}>{{.}}</option>
             {{end}}
           </select>
         </div>
-        <button type="submit">Apply</button>
+        <button type="submit">{{T "map.apply"}}</button>
       </form>
     </div>
 
     <div class="legend">
-      <span style="background:#e10eff">Top 0–20%</span>
-      <span style="background:#ff14a2">Top 20–40%</span>
-      <span style="background:#ff4927">Top 40–60%</span>
-      <span style="background:#f1f100">Top 60–80%</span>
-      <span style="background:#00ff00">Top 80–100%</span>
+      <span style="background:#e10eff">{{T "map.legend_0_20"}}</span>
+      <span style="background:#ff14a2">{{T "map.legend_20_40"}}</span>
+      <span style="background:#ff4927">{{T "map.legend_40_60"}}</span>
+      <span style="background:#f1f100">{{T "map.legend_60_80"}}</span>
+      <span style="background:#00ff00">{{T "map.legend_80_100"}}</span>
     </div>
 
     <div id="map"></div>
   </main>
   <script>
+    const I = window.I18N || {};
+    const t = function (k) { return I[k] || k; };
     const spots = {{.PointsJSON}};
     const map = L.map('map').setView([32.0853, 34.7818], 7);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -93,9 +97,9 @@
         fillOpacity: 0.85
       }).addTo(map);
       marker.bindPopup(
-        '<b>' + spot.spot_name + '</b><br>Score: ' + spot.score +
-        '<br><a href="/spots/details?spot_id=' + spot.spot_id + '" target="_blank">Details</a>' +
-        '<br><a href="https://www.windguru.cz/archive-stats.php?id_spot=' + spot.spot_id + '" target="_blank" rel="noopener">Windguru archive</a>'
+        '<b>' + spot.spot_name + '</b><br>' + t('map.popup_score') + ': ' + spot.score +
+        '<br><a href="/spots/details?spot_id=' + spot.spot_id + '" target="_blank">' + t('map.popup_details') + '</a>' +
+        '<br><a href="https://www.windguru.cz/archive-stats.php?id_spot=' + spot.spot_id + '" target="_blank" rel="noopener">' + t('map.popup_archive') + '</a>'
       );
       markers.push(marker);
     });

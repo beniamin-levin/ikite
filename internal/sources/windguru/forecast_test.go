@@ -34,15 +34,14 @@ func TestParseForecastSpotGFS(t *testing.T) {
 	}
 
 	loc := time.FixedZone("IST", 3*3600)
-	day := time.Date(2026, 7, 16, 0, 0, 0, 0, loc)
 	mr := spot.Tabs[0].IDModelArr[0]
 
-	rows, err := parseModelForecast(modelBody, 373090, mr, day, loc)
+	rows, err := parseModelForecast(modelBody, 373090, mr, loc)
 	if err != nil {
 		t.Fatalf("fetchModel: %v", err)
 	}
 	if len(rows) == 0 {
-		t.Fatal("no rows for today")
+		t.Fatal("no rows")
 	}
 	if rows[0].IDModel != 3 {
 		t.Fatalf("id_model: %d", rows[0].IDModel)
@@ -51,8 +50,8 @@ func TestParseForecastSpotGFS(t *testing.T) {
 		t.Fatalf("windguru_id: %d", rows[0].WindguruID)
 	}
 	for _, r := range rows {
-		if !sameCalendarDay(r.Period, day) {
-			t.Fatalf("period outside today: %s", r.Period)
+		if !sameCalendarDay(r.Period, r.ForecastDate) {
+			t.Fatalf("period/forecast_date mismatch: %s / %s", r.Period, r.ForecastDate)
 		}
 	}
 }

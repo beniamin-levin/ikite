@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{lang}}" dir="{{dir}}" data-theme="{{theme}}">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ikite — KY Wind Prediction</title>
+  <title>{{T "title.prediction"}}</title>
   {{template "head_common" .}}
   <style>
     .pred { max-width: 720px; }
@@ -17,14 +17,18 @@
       font-weight: 600;
     }
     .pred .card p { margin: 0; font-size: 1.125rem; font-weight: 500; }
-    .pred .card.highlight { background: #e8f5e9; border-color: #a5d6a7; }
+    .pred .card.highlight {
+      background: rgba(86, 221, 123, 0.12);
+      border-color: rgba(86, 221, 123, 0.35);
+    }
     .status { color: var(--muted); font-size: 0.875rem; margin-top: 12px; }
-    .err { color: #c00; }
+    .err { color: var(--err); }
     .hours-wrap { overflow-x: auto; margin-top: 16px; }
     .hours {
       border-collapse: collapse;
       width: 100%;
-      background: #fff;
+      background: var(--table-bg);
+      color: var(--text);
       font-size: 0.85rem;
     }
     .hours th, .hours td {
@@ -32,11 +36,12 @@
       padding: 4px 6px;
       text-align: center;
       white-space: nowrap;
+      color: var(--text);
     }
-    .hours th { background: #f5f7fa; font-weight: 600; }
+    .hours th { background: var(--table-th-bg); font-weight: 600; }
     .hours th.peak, .hours td.peak {
-      background: #e8f5e9;
-      border-color: #a5d6a7;
+      background: rgba(86, 221, 123, 0.16);
+      border-color: rgba(86, 221, 123, 0.4);
       font-weight: 700;
     }
   </style>
@@ -44,15 +49,17 @@
 <body>
   {{template "nav" .}}
   <main class="page pred">
-    <h1>KY wind prediction</h1>
-    <p class="muted" id="meta">Loading…</p>
+    <h1>{{T "prediction.heading"}}</h1>
+    <p class="muted" id="meta">{{T "prediction.loading"}}</p>
     <div id="content">
-      <p class="status">Analyzing forecast…</p>
+      <p class="status">{{T "prediction.analyzing"}}</p>
     </div>
   </main>
 
   <script>
     (function () {
+      const I = window.I18N || {};
+      const t = function (k) { return I[k] || k; };
       const content = document.getElementById('content');
       const meta = document.getElementById('meta');
 
@@ -63,18 +70,18 @@
         })
         .then(function (d) {
           const source = d.source ? d.source : 'history';
-          meta.textContent = d.date + ' · source ' + source +
-            (d.similar_days != null ? ' · ' + d.similar_days + ' similar summer days' : '') +
-            (d.based_on_readings ? ' · ' + Number(d.based_on_readings).toLocaleString() + ' readings' : '');
+          meta.textContent = d.date + ' · ' + t('prediction.meta_source') + ' ' + source +
+            (d.similar_days != null ? ' · ' + t('prediction.meta_similar').replace('%d', d.similar_days) : '') +
+            (d.based_on_readings ? ' · ' + t('prediction.meta_readings').replace('%d', Number(d.based_on_readings).toLocaleString()) : '');
           let html =
-            '<div class="card highlight"><h2>Strongest window</h2><p>' + esc(d.strongest_window) + '</p></div>' +
-            '<div class="card"><h2>Expected peak</h2><p>' + esc(d.expected_peak) + '</p></div>' +
-            '<div class="card"><h2>Direction</h2><p>' + esc(d.direction) + '</p></div>' +
-            '<div class="card"><h2>Good window</h2><p>' + esc(d.good_window) + '</p></div>' +
-            '<div class="card"><h2>Wind down</h2><p>' + esc(d.wind_down) + '</p></div>';
+            '<div class="card highlight"><h2>' + esc(t('prediction.strongest')) + '</h2><p>' + esc(d.strongest_window) + '</p></div>' +
+            '<div class="card"><h2>' + esc(t('prediction.expected_peak')) + '</h2><p>' + esc(d.expected_peak) + '</p></div>' +
+            '<div class="card"><h2>' + esc(t('prediction.direction')) + '</h2><p>' + esc(d.direction) + '</p></div>' +
+            '<div class="card"><h2>' + esc(t('prediction.good_window')) + '</h2><p>' + esc(d.good_window) + '</p></div>' +
+            '<div class="card"><h2>' + esc(t('prediction.wind_down')) + '</h2><p>' + esc(d.wind_down) + '</p></div>';
           if (d.openwrf && d.openwrf.hours && d.openwrf.hours.length) {
             const win = parseWindow((d.openwrf.strongest_window || d.strongest_window) || '');
-            html += '<h2 style="font-size:1rem;margin:20px 0 8px">openWRF timeline</h2><div class="hours-wrap"><table class="hours"><thead><tr>';
+            html += '<h2 style="font-size:1rem;margin:20px 0 8px">' + esc(t('prediction.openwrf_timeline')) + '</h2><div class="hours-wrap"><table class="hours"><thead><tr>';
             d.openwrf.hours.forEach(function (h) {
               html += '<th' + (inWindow(h.time, win) ? ' class="peak"' : '') + '>' + esc(h.time) + '</th>';
             });
@@ -86,13 +93,13 @@
             html += '</tr></tbody></table></div>';
           }
           if (d.conditions) html += '<p class="status">' + esc(d.conditions) + '</p>';
-          if (d.history && d.history.summary) html += '<p class="status">Past accuracy: ' + esc(d.history.summary) + '</p>';
-          if (d.current) html += '<p class="status">Now: ' + esc(d.current) + '</p>';
+          if (d.history && d.history.summary) html += '<p class="status">' + esc(t('prediction.past_accuracy')) + ': ' + esc(d.history.summary) + '</p>';
+          if (d.current) html += '<p class="status">' + esc(t('prediction.now')) + ': ' + esc(d.current) + '</p>';
           content.innerHTML = html;
           scrollToStrongest();
         })
         .catch(function (e) {
-          content.innerHTML = '<p class="err">Failed to load prediction: ' + esc(e.message) + '</p>';
+          content.innerHTML = '<p class="err">' + esc(t('prediction.failed')) + ': ' + esc(e.message) + '</p>';
           meta.textContent = '';
         });
 

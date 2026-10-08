@@ -1,30 +1,31 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{lang}}" dir="{{dir}}" data-theme="{{theme}}">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ikite — Spot Ratings</title>
+  <title>{{T "title.rating"}}</title>
   {{template "head_common" .}}
   <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css" />
   <style>
     table.dataTable { width: 100% !important; }
     table.dataTable thead th { white-space: nowrap; }
     .details-link { margin-left: 8px; font-size: 0.85rem; color: var(--muted); }
+    html[dir="rtl"] .details-link { margin-left: 0; margin-right: 8px; }
   </style>
 </head>
 <body>
   {{template "nav" .}}
   <main class="page">
-    <h1>Windguru spot ratings</h1>
-    <p class="muted">Archive scores from Windguru monthly wind statistics (higher = more windy days).</p>
+    <h1>{{T "rating.heading"}}</h1>
+    <p class="muted">{{T "rating.subtitle"}}</p>
     <div class="card">
       <table id="ratings" class="display">
         <thead>
           <tr>
             <th>#</th>
-            <th>Spot</th>
-            <th>Country</th>
-            <th>Score</th>
+            <th>{{T "rating.col_spot"}}</th>
+            <th>{{T "rating.col_country"}}</th>
+            <th>{{T "rating.col_score"}}</th>
           </tr>
         </thead>
         <tbody>
@@ -33,7 +34,7 @@
             <td>{{inc $i}}</td>
             <td>
               <a href="https://www.windguru.cz/{{$r.SpotID}}" target="_blank" rel="noopener">{{$r.SpotName}}</a>
-              <a class="details-link" href="/spots/details?spot_id={{$r.SpotID}}">details</a>
+              <a class="details-link" href="/spots/details?spot_id={{$r.SpotID}}">{{T "rating.details"}}</a>
             </td>
             <td>{{$r.CountryName}}</td>
             <td>{{$r.Score}}</td>
@@ -46,14 +47,22 @@
   <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
   <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
   <script>
-    $(function () {
-      $('#ratings').DataTable({
-        paging: false,
-        searching: true,
-        info: false,
-        order: [[3, 'desc']]
+    (function () {
+      const I = window.I18N || {};
+      $(function () {
+        $('#ratings').DataTable({
+          paging: false,
+          searching: true,
+          info: false,
+          order: [[3, 'desc']],
+          language: {
+            search: I['dt.search'] || 'Search:',
+            zeroRecords: I['dt.zero'] || 'No data available in table',
+            emptyTable: I['dt.zero'] || 'No data available in table'
+          }
+        });
       });
-    });
+    })();
   </script>
 </body>
 </html>

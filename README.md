@@ -13,6 +13,8 @@ Israeli Mediterranean wind monitoring for kitesurfing/windsurfing.
 - **Forecast job** — fetches Hebrew AI report from surfo, translates to English, stores + Telegram
 - **Windguru forecast job** — daily at 07:00, fetches all models for spots with `windguru_id` via Beget proxy
 - **openWRF forecast job** — daily at 08:00, parses Kiryat Yam / matched-spot 1 km PDFs from Google Drive (multi-day, overrides overlapping hours next day)
+- **External forecast job** — daily at 09:00: OpenSkiron Israel 4 km GRIB, Open-Meteo (AIFS + UKMO), and IMS station observations (36h backfill)
+- **IMS observation job** — every 10 minutes: incremental IMS Envista station readings (~3h window)
 - **Forecast page** (`/forecast`) — all stored models for spots checked visible in Settings
 
 ## Quick start
@@ -28,6 +30,9 @@ MIGRATE=1 ./bin/server        # http://localhost:8080
 ./bin/forecast                # run every ~15–30 min via cron
 ./bin/wgforecast              # daily 07:00 — Windguru model forecasts (see deploy/install-wg-forecast-timer.sh)
 ./bin/openwrf                 # daily 08:00 — openWRF Kiryat Yam forecast (see deploy/install-openwrf-forecast-timer.sh)
+./bin/forecastgust            # daily 08:10 — single 25+ kt forecast gust Telegram alert (see deploy/install-forecast-gust-timer.sh)
+./bin/extforecast             # daily 09:00 — OpenSkiron + Open-Meteo + IMS backfill (see deploy/install-ext-forecast-timer.sh)
+./bin/ims                     # every 10 min — IMS observations (see deploy/install-ims-timer.sh)
 ```
 
 ## Cron examples
@@ -53,7 +58,9 @@ Per-station Windguru timers (production): see `deploy/setup-wg-timers.sh` and `d
 | `BEGET_PROXY_SECRET` | Shared secret — must match `PROXY_SECRET` in uploaded `proxy_post.php` |
 | `KY_HISTORY_URL` | Upstream Surfo KY wind JSON (`api_wind.php`) |
 | `SURFO_LIVE_URL` | Upstream Surfo AI forecast JSON |
-| `OPENWRF_PDF_URL` | Optional override for the public openWRF Google Drive PDF |
+| `OPENWRF_DRIVE_URL` | Google Drive root folder URL for openWRF PDFs (first subfolder is used) |
+| `OPENWRF_PDF_URL` | Optional override for a single openWRF PDF URL (testing) |
+| `IMS_API_TOKEN` | Optional IMS Envista API token for IMS real columns on `/forecast` and the `ims` collector |
 | `WG_TIMER_QUEUE_DIR` | Directory for pending timer requests (web writes, root cron processes) |
 | `WG_TIMER_SCRIPT` | Path to `deploy/add-wg-timer.sh` (used by queue processor) |
 
@@ -64,6 +71,8 @@ cmd/server      HTTP dashboard
 cmd/collector   wind poll + alerts
 cmd/wgforecast  Windguru forecast job (daily)
 cmd/openwrf     openWRF forecast job (daily)
+cmd/extforecast OpenSkiron + Open-Meteo + IMS backfill (daily)
+cmd/ims         IMS Envista observation collector (every 10 min)
 internal/       packages (store, sources, notify, web)
 migrations/     MySQL schema
 deploy/         systemd timers, PHP proxies, env template

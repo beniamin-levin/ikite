@@ -4,10 +4,16 @@
 .env.*.local
 !.env.example
 
+# API tokens and other local secrets (never commit)
+secrets/
+*.token
+ims-api-*.json
+
 # SSH / TLS keys (never commit private keys)
 server-keys/*
 !server-keys/README.md
 *.pem
+*.key
 
 # Node (Playwright layout verification scripts)
 node_modules/
@@ -19,8 +25,29 @@ bin/
 *.test
 *.out
 
+# Stray root binaries from `go build ./...` — one per cmd/, anchored to the repo
+# root so the cmd/<name>/ source directories themselves stay tracked.
+/collector
+/estimate
+/extforecast
+/forecast
+/forecastgust
+/ims
+/openwrf
+/prediction
+/server
+/squall
+/wgforecast
+
+# Working notes, scratch files — local only
+notes/
+scratch/
+
 # Logs & runtime
 *.log
+
+# AI assistant rules (server login and deploy details)
+.cursor/
 
 # OS & editors
 .DS_Store

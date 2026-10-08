@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ben/ikite-go/internal/i18n"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/parser"
@@ -39,9 +40,9 @@ func (s *Server) handleAbout(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		s.Log.Error("about cv", "err", err)
-		data["Error"] = "Could not load CV content. Try again later or view the source on GitHub."
+		data["Error"] = i18n.FromRequest(r).T("about.error")
 	}
-	if err := s.tmpl.ExecuteTemplate(w, "about.html", data); err != nil {
+	if err := s.render(w, r, "about.html", data); err != nil {
 		s.Log.Error("render about", "err", err)
 	}
 }

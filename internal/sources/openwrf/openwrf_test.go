@@ -73,6 +73,41 @@ func TestParsePeriodAcrossNewYear(t *testing.T) {
 	}
 }
 
+func TestFirstSubfolderID(t *testing.T) {
+	html := `<div class="flip-entry" id="entry-1EFf-HG_uaLy6mY-PvWqCTe-KmGAtiaSa">
+<a href="https://drive.google.com/drive/folders/1EFf-HG_uaLy6mY-PvWqCTe-KmGAtiaSa" target="_blank">
+<div class="flip-entry-title">israel_1km_kite_forecasts</div></div>
+<div class="flip-entry" id="entry-other">
+<a href="https://drive.google.com/drive/folders/1OTHERfolder" target="_blank">
+<div class="flip-entry-title">other</div></div>`
+	got, err := firstSubfolderID(html)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "1EFf-HG_uaLy6mY-PvWqCTe-KmGAtiaSa" {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestParsePDFsFromFolderHTML(t *testing.T) {
+	html := `<div class="flip-entry">
+<a href="https://drive.google.com/file/d/1zc7mvSwyHKxdXhRwnFmouwOU8leXgYx3/view">
+<div class="flip-entry-title">18z_1km_Kiryat_Yam.pdf</div></div>
+<div class="flip-entry">
+<a href="https://drive.google.com/file/d/1JY4S444JXKSgCisDf0AgL1dzU4lqQmHK/view">
+<div class="flip-entry-title">18z_1km_Kiryat_Yam_wind_station.pdf</div></div>`
+	files, err := parsePDFsFromFolderHTML(html)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != 2 {
+		t.Fatalf("got %d files, want 2", len(files))
+	}
+	if files[0].Name != "18z_1km_Kiryat_Yam.pdf" {
+		t.Fatalf("got %q", files[0].Name)
+	}
+}
+
 func TestParseRejectsMissingRows(t *testing.T) {
 	if _, err := Parse("not a forecast", time.Now(), time.UTC); err == nil {
 		t.Fatal("expected an error")
@@ -123,7 +158,27 @@ func TestMatchSpots(t *testing.T) {
 	}
 }
 
-func TestFetchLivePDF(t *testing.T) {
+func TestParseDriveFolderID(t *testing.T) {
+	tests := []struct {
+		in   string
+		want string
+	}{
+		{"https://drive.google.com/drive/u/0/folders/1LXmxPuvGflCwOssTYiSKVhobdx-olUEl", "1LXmxPuvGflCwOssTYiSKVhobdx-olUEl"},
+		{"https://drive.google.com/drive/folders/1EFf-HG_uaLy6mY-PvWqCTe-KmGAtiaSa", "1EFf-HG_uaLy6mY-PvWqCTe-KmGAtiaSa"},
+		{"1EFf-HG_uaLy6mY-PvWqCTe-KmGAtiaSa", "1EFf-HG_uaLy6mY-PvWqCTe-KmGAtiaSa"},
+	}
+	for _, tc := range tests {
+		got, err := ParseDriveFolderID(tc.in)
+		if err != nil {
+			t.Fatalf("%q: %v", tc.in, err)
+		}
+		if got != tc.want {
+			t.Fatalf("%q: got %q want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+func TestFetchLiveForecast(t *testing.T) {
 	if os.Getenv("OPENWRF_LIVE_TEST") == "" {
 		t.Skip("set OPENWRF_LIVE_TEST=1 to download the public forecast")
 	}
@@ -131,7 +186,15 @@ func TestFetchLivePDF(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rows, err := New("").Fetch(time.Now(), loc)
+	driveURL := os.Getenv("OPENWRF_DRIVE_URL")
+	if driveURL == "" {
+		t.Skip("set OPENWRF_DRIVE_URL for live test")
+	}
+	client, err := New("", driveURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows, err := client.Fetch(time.Now(), loc)
 	if err != nil {
 		t.Fatal(err)
 	}

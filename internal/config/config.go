@@ -20,11 +20,17 @@ type Config struct {
 	BegetProxyURL     string
 	BegetProxySecret  string
 	OpenWRFPDFURL     string
+	OpenWRFDriveURL   string
+	IMSAPIToken       string
 
 	TelegramAlertToken  string
 	TelegramAlertChatID string
 	TelegramAIToken     string
 	TelegramAIChatID    string
+	// The storm bot: squall alerts for Kiryat Haim (internal/squall).
+	TelegramStormToken  string
+	TelegramStormChatID string
+	SquallArchiveDir    string
 
 	AlertStartHour int
 	AlertEndHour   int
@@ -66,10 +72,15 @@ func Load() (*Config, error) {
 		BegetProxyURL:       os.Getenv("BEGET_PROXY_URL"),
 		BegetProxySecret:    os.Getenv("BEGET_PROXY_SECRET"),
 		OpenWRFPDFURL:       os.Getenv("OPENWRF_PDF_URL"),
+		OpenWRFDriveURL:     os.Getenv("OPENWRF_DRIVE_URL"),
+		IMSAPIToken:         os.Getenv("IMS_API_TOKEN"),
 		TelegramAlertToken:  os.Getenv("TELEGRAM_ALERT_TOKEN"),
 		TelegramAlertChatID: os.Getenv("TELEGRAM_ALERT_CHAT_ID"),
 		TelegramAIToken:     os.Getenv("TELEGRAM_AI_TOKEN"),
 		TelegramAIChatID:    os.Getenv("TELEGRAM_AI_CHAT_ID"),
+		TelegramStormToken:  os.Getenv("TELEGRAM_STORM_TOKEN"),
+		TelegramStormChatID: os.Getenv("TELEGRAM_STORM_CHAT_ID"),
+		SquallArchiveDir:    getenv("SQUALL_ARCHIVE_DIR", "/var/lib/ikite-go/radar"),
 		AlertStartHour:      getenvInt("ALERT_START_HOUR", 8),
 		AlertEndHour:        getenvInt("ALERT_END_HOUR", 17),
 		KYCollectStart:      getenvInt("KY_COLLECT_START_HOUR", 9),

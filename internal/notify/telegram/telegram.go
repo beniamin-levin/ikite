@@ -35,6 +35,9 @@ func (c *Client) Send(msg string) error {
 	form := url.Values{}
 	form.Set("chat_id", c.ChatID)
 	form.Set("text", msg)
+	// No link previews: a link such as https://ims.gov.il/en/warnings serves
+	// JSON, which Telegram would show as a file attached to the alert.
+	form.Set("link_preview_options", `{"is_disabled":true}`)
 
 	resp, err := c.HTTP.Post(endpoint, "application/x-www-form-urlencoded", strings.NewReader(form.Encode()))
 	if err != nil {

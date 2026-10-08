@@ -10,8 +10,9 @@ import (
 )
 
 const spotSelectSQL = `
-	SELECT id, name, windguru_station_id, windguru_id, sort_order, visible, collect,
-	       collect_interval_min, collect_start_hour, collect_end_hour
+	SELECT id, name, windguru_station_id, windguru_id, lat, lon, ims_station_id,
+	       sort_order, visible, collect,
+	       collect_interval_min, collect_start_hour, collect_end_hour, windguru_hires_id
 	FROM spots`
 
 func (s *Store) ListSpots() ([]models.Spot, error) {
@@ -342,11 +343,16 @@ type spotScanner interface {
 
 func scanSpot(row spotScanner) (models.Spot, error) {
 	var sp models.Spot
-	var wg, wgSpot sql.NullInt64
+	var wg, wgSpot, ims, hires sql.NullInt64
+	var lat, lon sql.NullFloat64
 	var visible, collect int
-	if err := row.Scan(&sp.ID, &sp.Name, &wg, &wgSpot, &sp.SortOrder, &visible, &collect,
-		&sp.CollectIntervalMin, &sp.CollectStartHour, &sp.CollectEndHour); err != nil {
+	if err := row.Scan(&sp.ID, &sp.Name, &wg, &wgSpot, &lat, &lon, &ims, &sp.SortOrder, &visible, &collect,
+		&sp.CollectIntervalMin, &sp.CollectStartHour, &sp.CollectEndHour, &hires); err != nil {
 		return sp, err
+	}
+	if hires.Valid {
+		id := int(hires.Int64)
+		sp.WindguruHiresID = &id
 	}
 	if wg.Valid {
 		id := int(wg.Int64)
@@ -356,10 +362,62 @@ func scanSpot(row spotScanner) (models.Spot, error) {
 		id := int(wgSpot.Int64)
 		sp.WindguruID = &id
 	}
+	if lat.Valid {
+		v := lat.Float64
+		sp.Lat = &v
+	}
+	if lon.Valid {
+		v := lon.Float64
+		sp.Lon = &v
+	}
+	if ims.Valid {
+		id := int(ims.Int64)
+		sp.IMSStationID = &id
+	}
 	sp.Visible = visible != 0
 	sp.Collect = collect != 0
 	sp.CollectIntervalMin = models.NormalizeCollectInterval(sp.CollectIntervalMin)
 	sp.CollectStartHour = models.NormalizeCollectHour(sp.CollectStartHour, 8)
 	sp.CollectEndHour = models.NormalizeCollectHour(sp.CollectEndHour, 22)
 	return sp, nil
+}
+
+// SpotsWithCoords returns spots that have lat/lon for point forecast APIs.
+func (s *Store) SpotsWithCoords() ([]models.Spot, error) {
+	rows, err := s.DB.Query(spotSelectSQL + `
+		WHERE lat IS NOT NULL AND lon IS NOT NULL
+		ORDER BY sort_order, id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []models.Spot
+	for rows.Next() {
+		sp, err := scanSpot(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, sp)
+	}
+	return out, rows.Err()
+}
+
+// SpotsWithIMS returns spots with an IMS station mapping.
+func (s *Store) SpotsWithIMS() ([]models.Spot, error) {
+	rows, err := s.DB.Query(spotSelectSQL + `
+		WHERE ims_station_id IS NOT NULL
+		ORDER BY sort_order, id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []models.Spot
+	for rows.Next() {
+		sp, err := scanSpot(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, sp)
+	}
+	return out, rows.Err()
 }

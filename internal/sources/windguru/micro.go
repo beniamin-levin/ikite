@@ -28,14 +28,25 @@ var microModelByPrefix = []struct {
 	{"ICON 7 km", microModel{ID: 43, Name: "icon7"}},
 	{"ICON 13 km", microModel{ID: 45, Name: "icon13"}},
 	{"GDPS 15 km", microModel{ID: 59, Name: "gdps"}},
-	{"WRF 3 km", microModel{ID: 23, Name: "wrf3"}},
-	{"WRF 9 km", microModel{ID: 42, Name: "wrf9"}},
+	// Windguru's own ids (iapi forecast_spot / q=forecast "model_name"), checked
+	// 2026-10-06 on spot 378048: 90 = "WRF 3 km (Israel+)", 23 = "WRF 9 km
+	// (Egypt)", 923 = "WRF* 1 km (Israel)", 119 = "Zephr-HD 2.6 km (Middle East)".
+	// Until then WRF 3 km was stored as 23 and WRF 9 km as 42 (migration 024).
+	{"WRF* 1 km", microModel{ID: 923, Name: "wrf1"}},
+	{"Zephr-HD 2.6 km", microModel{ID: 119, Name: "zephr"}},
+	{"WRF 3 km", microModel{ID: 90, Name: "wrf3"}},
+	{"WRF 9 km", microModel{ID: 23, Name: "wrf9"}},
 	{"NAM 12 km", microModel{ID: 7, Name: "nam"}},
 	{"HARMONIE 5 km", microModel{ID: 48, Name: "harmonie"}},
 }
 
 var (
-	microModelHeader = regexp.MustCompile(`^([A-Za-z][A-Za-z0-9 /.+_-]+?) \(init:`)
+	// Match any "<model name> (init: ...)" heading, not just names built from a
+	// known character set: windguru labels models things like "WRF* 1 km" and
+	// "Zephr-HD 2.6 km". A heading we fail to recognise here is worse than one we
+	// do not support — the section's rows would be attributed to the model above
+	// it, producing a duplicate series at the same timestamps.
+	microModelHeader = regexp.MustCompile(`^([A-Za-z][^(]*?) \(init:`)
 	microRow         = regexp.MustCompile(`^\s+\w{3}\s+(\d+)\.\s+(\d{2})h\s+(\d+|-)\s+(\d+|-)\s+\S+\s+(\d+)(?:\s+(\d+|-))?`)
 )
 
@@ -52,7 +63,7 @@ func (c *ForecastClient) FetchSpotForecastsMicro(spotID int, forecastDate time.T
 		return nil, err
 	}
 	if len(rows) == 0 {
-		return nil, fmt.Errorf("micro forecast spot %d: no rows for %s", spotID, forecastDate.Format("2006-01-02"))
+		return nil, fmt.Errorf("micro forecast spot %d: no rows", spotID)
 	}
 	return rows, nil
 }
@@ -89,9 +100,9 @@ func ParseMicroForecast(text string, spotID int, forecastDate time.Time, loc *ti
 	if loc == nil {
 		return nil, fmt.Errorf("timezone is required")
 	}
-	day := dateOnly(forecastDate.In(loc))
-	year := day.Year()
-	month := day.Month()
+	refDay := dateOnly(forecastDate.In(loc))
+	year := refDay.Year()
+	month := refDay.Month()
 
 	var out []models.WindForecastRow
 	var cur *microModel
@@ -139,11 +150,8 @@ func ParseMicroForecast(text string, spotID int, forecastDate time.Time, loc *ti
 		}
 		period := time.Date(year, month, dom, hour, 0, 0, 0, loc)
 		// Handle month rollover near month boundaries.
-		if period.Before(day.AddDate(0, 0, -1)) {
+		if period.Before(refDay.AddDate(0, 0, -1)) {
 			period = time.Date(year, month+1, dom, hour, 0, 0, 0, loc)
-		}
-		if !sameCalendarDay(period, day) {
-			continue
 		}
 		w, g, d := wind, gust, dir
 		var temp *float64
@@ -153,7 +161,7 @@ func ParseMicroForecast(text string, spotID int, forecastDate time.Time, loc *ti
 			}
 		}
 		out = append(out, models.WindForecastRow{
-			ForecastDate: day,
+			ForecastDate: dateOnly(period),
 			WindguruID:   spotID,
 			IDModel:      cur.ID,
 			Model:        cur.Name,
@@ -210,6 +218,16 @@ func DisplayModelName(idModel int, model string) string {
 		return "ifs"
 	case 1000001:
 		return "openWRF"
+	case 1000002:
+		return "skiron"
+	case 1000003:
+		return "aifs"
+	case 1000004:
+		return "ukmo"
+	case 1000005:
+		return "icon_eu"
+	case 1000006:
+		return "ims_sea"
 	}
 	if model != "" {
 		return model

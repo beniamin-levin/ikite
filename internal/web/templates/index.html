@@ -1,175 +1,690 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{lang}}" dir="{{dir}}" data-theme="{{theme}}">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ikite — Israel Wind Data</title>
+  <title>{{T "title.site"}}</title>
   {{template "head_common" .}}
   <style>
-    table { border-collapse: collapse; width: 100%; background: #fff; }
-    table td { text-align: center; padding: 4px 7px; white-space: nowrap; }
-    table thead td:not(:first-child) {
-      padding-right: 0; border: 1px solid #00000017; border-bottom-color: black;
+    .summary {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 16px 20px;
+      align-items: start;
+      padding: 16px 20px;
+      margin-bottom: 14px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: var(--card-bg);
+      box-shadow: var(--shadow);
     }
-    .wind18 { background-color: #ffe100; }
-    .wind16 { background-color: #cbff00; }
-    .wind14 { background-color: rgba(11,254,0,1); }
-    .wind10 { background-color: rgba(82,249,192,1); }
-    .wind8 { background-color: rgba(157,250,246,1); }
-    .wind_arrow { width: 15px; height: 15px; vertical-align: middle; }
-    .th-short { display: none; }
-    .report_en {
-      width: 100%;
-      max-width: none;
-      margin-bottom: 16px;
+    .stars { color: var(--text); font-size: 18px; letter-spacing: 2px; line-height: 1.2; }
+    .rating-copy { min-width: 0; }
+    .rating-copy small {
+      color: var(--accent-text);
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-size: 11px;
+    }
+    .rating-copy p {
+      margin: 5px 0 0;
       line-height: 1.45;
+      color: var(--text);
+      font-size: 14px;
       white-space: pre-wrap;
       overflow-wrap: anywhere;
     }
-    .table-wrap {
-      overflow-x: auto;
-      -webkit-overflow-scrolling: touch;
-      background: #fff;
-      border: 1px solid var(--line);
-      border-radius: 12px;
+    .rating-copy strong { color: var(--accent-text); }
+    .summary-actions {
+      display: flex;
+      gap: 8px;
+      flex-shrink: 0;
+      align-items: center;
     }
-    @media only screen and (max-width: 700px) {
-      .page.page-wide { padding-left: 6px; padding-right: 6px; }
-      .report_en { padding: 10px; font-size: 0.88rem; margin-bottom: 10px; line-height: 1.35; }
-      .table-wrap {
-        overflow-x: hidden;
-        border-radius: 8px;
+    .summary-updated {
+      display: none;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .summary-updated b { color: var(--text); }
+    .summary-actions a,
+    .summary-actions button {
+      border: 1px solid var(--line);
+      background: var(--btn-bg);
+      color: var(--btn-fg);
+      padding: 10px 13px;
+      border-radius: 11px;
+      cursor: pointer;
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .summary-actions a:hover,
+    .summary-actions button:hover { color: var(--text); text-decoration: none; }
+    .summary-actions button.active {
+      border-color: rgba(49, 221, 208, 0.45);
+      color: var(--accent-text);
+    }
+
+    .table-card {
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      background: var(--card-bg);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .table-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--line);
+      min-height: 48px;
+    }
+    .table-head > div:first-child {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      flex-wrap: nowrap;
+    }
+    .live-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 0 4px rgba(86, 221, 123, 0.09);
+      flex: 0 0 auto;
+    }
+    .live-eyebrow {
+      color: var(--green);
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+    .table-head h1 {
+      font-size: 18px;
+      margin: 0;
+      white-space: nowrap;
+    }
+    .table-head p { display: none; }
+    .tools { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; justify-content: flex-end; }
+    .tools .configure-spots {
+      border: 1px solid var(--line);
+      background: var(--btn-bg);
+      color: var(--btn-fg);
+      padding: 6px 10px;
+      border-radius: 9px;
+      text-decoration: none;
+      font-size: 12px;
+      font-weight: 600;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+    .tools .configure-spots:hover { color: var(--text); text-decoration: none; }
+    .tools .configure-spots.active {
+      border-color: rgba(49, 221, 208, 0.45);
+      color: var(--accent-text);
+    }
+    .updated { font-size: 12px; color: var(--muted); white-space: nowrap; }
+    .updated b { color: var(--text); }
+    .unit {
+      display: flex;
+      border: 1px solid var(--line);
+      padding: 2px;
+      border-radius: 9px;
+    }
+    .unit button {
+      border: 0;
+      background: none;
+      color: var(--muted);
+      padding: 5px 9px;
+      border-radius: 7px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 11px;
+    }
+    .unit button.active { background: var(--accent-soft); color: var(--accent-text); }
+
+    .wind-table-wrap {
+      overflow: auto;
+      border-top: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+      max-height: 720px;
+    }
+    #windTable {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      min-width: 950px;
+      background: transparent;
+    }
+    #windTable th,
+    #windTable td {
+      text-align: center;
+      border-right: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+    }
+    #windTable th {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      background: var(--table-th-bg);
+      color: var(--text);
+      padding: 8px 6px;
+      font-size: 12px;
+      font-weight: 600;
+      height: 34px;
+    }
+    #windTable th a.th-spot-link {
+      color: inherit;
+      text-decoration: none;
+    }
+    #windTable th a.th-spot-link:hover {
+      color: var(--accent);
+      text-decoration: underline;
+    }
+    /* Concentrated top accent from latest wind level (header highlight) */
+    #windTable thead th:not(.time) {
+      border-top: 3px solid var(--hdr-accent-0);
+      background: var(--table-th-bg) !important;
+      color: var(--text);
+    }
+    #windTable thead th.level0 { border-top-color: var(--hdr-accent-0); }
+    #windTable thead th.level1 { border-top-color: var(--hdr-accent-1); }
+    #windTable thead th.level2 { border-top-color: var(--hdr-accent-2); }
+    #windTable thead th.level3 { border-top-color: var(--hdr-accent-3); }
+    #windTable thead th.level4 { border-top-color: var(--hdr-accent-4); }
+    #windTable th.time,
+    #windTable td.time {
+      position: sticky;
+      left: 0;
+      z-index: 6;
+      background: var(--panel);
+      min-width: 90px;
+    }
+    #windTable th.time {
+      z-index: 7;
+      border-top: 3px solid transparent;
+      background: var(--table-th-bg) !important;
+    }
+    #windTable td {
+      height: 28px;
+      padding: 2px 4px;
+      font-size: 12px;
+      background: var(--panel2);
+      white-space: nowrap;
+    }
+    #windTable td.time {
+      font-weight: 600;
+      color: var(--text);
+    }
+    #windTable td.level0 { background: var(--wind8); }
+    #windTable td.level1 { background: var(--wind10); }
+    #windTable td.level2 { background: var(--wind14); }
+    #windTable td.level3 { background: var(--wind16); }
+    #windTable td.level4 { background: var(--wind18); }
+    #windTable td.highlight { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08); }
+    #windTable .cell {
+      display: inline-flex;
+      flex-direction: row;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      max-width: 100%;
+    }
+    #windTable .cell .wind_arrow {
+      width: 11px;
+      height: 11px;
+      color: var(--text);
+    }
+    #windTable .cell strong {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    #windTable .cell em {
+      font-style: normal;
+      color: var(--muted);
+      font-size: 10px;
+    }
+    /* Secondary cell labels: light enough to read on teal/green/olive wind cells */
+    #windTable .cell em.temp { color: #b7f3ff; font-weight: 600; }
+    #windTable .cell em.pressure { color: #d5e2eb; }
+    #windTable .cell em.humidity { color: #d5e2eb; }
+    html[data-theme="light"] #windTable .cell em.temp { color: #0b5f7a; }
+    html[data-theme="light"] #windTable .cell em.pressure,
+    html[data-theme="light"] #windTable .cell em.humidity { color: #3d5668; }
+    #windTable td.ims-col .cell { gap: 3px; }
+    #windTable th.ims-col {
+      color: var(--blue);
+    }
+    #windTable td.ims-col {
+      box-shadow: inset 0 0 0 1px rgba(126, 200, 255, 0.12);
+    }
+    .th-short { display: none; }
+
+    .legend {
+      display: flex;
+      gap: 22px;
+      align-items: center;
+      flex-wrap: wrap;
+      padding: 14px 20px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .legend b { font-weight: 500; }
+    .legend i {
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+      display: inline-block;
+      margin-right: 6px;
+    }
+    .legend .c0 { background: #6c8596; }
+    .legend .c1 { background: #37c8ce; }
+    .legend .c2 { background: #58d594; }
+    .legend .c3 { background: #66e668; }
+    .legend .c4 { background: #ddd848; }
+
+    table td.has-samples { cursor: help; }
+    .slot-detail-pop {
+      position: fixed;
+      z-index: 80;
+      display: none;
+      min-width: 120px;
+      max-width: 240px;
+      max-height: 280px;
+      overflow: auto;
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: var(--pop-bg);
+      color: var(--text);
+      border: 1px solid var(--line);
+      font-size: 12px;
+      line-height: 1.35;
+      box-shadow: var(--shadow);
+      pointer-events: none;
+    }
+    .slot-detail-pop.is-open { display: block; }
+    .slot-detail-pop .slot-detail-title {
+      font-weight: 600;
+      margin-bottom: 6px;
+      opacity: 0.85;
+      font-size: 11px;
+    }
+    .slot-detail-pop table {
+      border-collapse: collapse;
+      width: 100%;
+      background: transparent;
+      min-width: 0;
+    }
+    .slot-detail-pop td {
+      padding: 2px 0;
+      white-space: nowrap;
+      vertical-align: middle;
+      text-align: left;
+      background: transparent !important;
+      border: 0 !important;
+      height: auto;
+    }
+    .slot-detail-pop td.t { padding-right: 10px; color: var(--muted); }
+    .slot-detail-pop .wind_arrow { width: 12px; height: 12px; color: var(--text); }
+
+    /* Mobile: compact cells (arrow + wind), scroll horizontally instead of clipping */
+    @media (max-width: 900px) {
+      .summary {
+        grid-template-columns: auto 1fr;
+        gap: 10px;
+        padding: 15px;
+        border-radius: 16px;
+        margin-bottom: 12px;
       }
-      table {
+      .stars { font-size: 17px; }
+      .rating-copy small { font-size: 12px; }
+      .rating-copy p { font-size: 13px; line-height: 1.45; margin-top: 7px; }
+      .summary-updated { display: block; }
+      .summary-actions {
+        grid-column: 1 / -1;
         width: 100%;
-        table-layout: fixed;
-        font-size: 10px;
-        line-height: 1.1;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        align-items: stretch;
       }
-      table td {
-        padding: 2px 1px;
-        letter-spacing: -0.3px;
+      .summary-actions .summary-updated {
+        grid-column: 1 / -1;
+        margin-bottom: 2px;
+      }
+      .summary-actions a,
+      .summary-actions button {
+        text-align: center;
+        padding: 9px 8px;
+        font-size: 12px;
+      }
+      .tools .updated { display: none; }
+      .table-card {
+        border-radius: 16px;
+        width: 100%;
+        max-width: 100%;
         overflow: hidden;
       }
-      table td:first-child { width: 34px; }
-      table thead td { font-size: 9px; }
-      table small { display: none; }
+      .table-head {
+        padding: 8px 10px;
+        gap: 8px;
+      }
+      .live-eyebrow { display: none; }
+      .table-head h1 { font-size: 16px; }
+      .unit button { padding: 4px 7px; font-size: 12px; }
+      .tools .configure-spots { padding: 5px 8px; font-size: 12px; }
+
       .th-full { display: none; }
       .th-short { display: inline; }
-      .wind_arrow { width: 10px; height: 10px; margin-right: -1px; }
-    }
-    /* Ultra-narrow: Apple Watch Ultra etc. */
-    @media only screen and (max-width: 399px) {
-      body { padding-top: 70px; }
-      .site-header { display: block !important; }
-      .site-header-inner {
-        display: block;
-        min-height: 0;
-        padding: 2px;
-        gap: 2px;
+
+      .wind-table-wrap {
+        width: 100%;
+        max-width: 100%;
+        max-height: none;
         overflow-x: auto;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior-x: contain;
+      }
+      #windTable {
+        width: max-content;
+        min-width: 100%;
+        max-width: none;
+        table-layout: auto;
+      }
+      #windTable th,
+      #windTable td {
+        padding: 4px 5px;
+        overflow: visible;
+      }
+      #windTable th.time,
+      #windTable td.time {
+        position: sticky;
+        left: 0;
+        z-index: 6;
+        width: 48px;
+        min-width: 48px;
+        max-width: 56px;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        background: var(--panel);
+        box-shadow: 1px 0 0 var(--line);
+      }
+      #windTable th.time { z-index: 8; background: var(--table-th-bg); }
+      #windTable th:not(.time),
+      #windTable td:not(.time) {
+        min-width: 54px;
+      }
+      #windTable th {
+        height: 34px;
+        font-size: 12px;
+        line-height: 1.15;
+        letter-spacing: -0.02em;
+        white-space: nowrap;
+      }
+      #windTable td { height: 32px; }
+      #windTable .cell {
+        gap: 3px;
+        width: auto;
+        min-width: 0;
+        justify-content: center;
+      }
+      #windTable .cell .wind_arrow {
+        width: 11px;
+        height: 11px;
+      }
+      #windTable .cell strong {
+        font-size: 12px;
+        line-height: 1.15;
+        letter-spacing: 0;
+        white-space: nowrap;
+      }
+      /* Keep mobile cells readable: wind (+ arrow) only */
+      #windTable .cell em { display: none; }
+      .legend {
+        width: 100%;
+        padding: 12px;
+        gap: 10px;
+        font-size: 12px;
+        white-space: nowrap;
+        overflow-x: auto;
+        flex-wrap: nowrap;
         scrollbar-width: none;
       }
-      .site-header-inner::-webkit-scrollbar { display: none; }
-      .brand { display: none; }
-      .site-nav-row1,
-      .site-nav-row2 {
-        flex: 0 0 auto;
-        flex-wrap: nowrap;
-        gap: 1px;
-      }
-      .site-nav a {
-        font-size: 7px;
-        padding: 2px 3px;
-        border-radius: 3px;
-      }
-      .report_en {
-        display: block !important;
-        margin: 1px 0 2px;
-        padding: 4px;
-        border-radius: 0;
-        font-size: 8px;
-        line-height: 1.2;
-      }
-      .page.page-wide { padding: 1px !important; }
-      .table-wrap {
-        width: 100%;
-        overflow-x: hidden;
-        border: 0;
-        border-radius: 0;
-      }
-      table {
-        width: 100%;
-        table-layout: fixed;
-        font-size: 8px;
-        line-height: 1.05;
-      }
-      table td {
-        min-width: 0;
-        overflow: hidden;
-        padding: 1px 0;
-        letter-spacing: -0.25px;
-      }
-      table td:first-child { width: 25px; }
-      table thead td {
-        font-size: 7px;
-        text-overflow: clip;
-      }
-      table small { display: none; }
-      .wind_arrow {
-        width: 8px;
-        height: 8px;
-        margin-right: -1px;
-      }
+      .legend::-webkit-scrollbar { display: none; }
+      .legend i { width: 9px; height: 9px; margin-right: 4px; }
+    }
+    @media (max-width: 390px) {
+      .summary { padding: 13px; }
+      #windTable th { font-size: 12px; height: 32px; }
+      #windTable th:not(.time),
+      #windTable td:not(.time) { min-width: 50px; padding: 3px 4px; }
+      #windTable td.time { font-size: 12px; }
+      #windTable .cell strong { font-size: 12px; }
+      #windTable .cell .wind_arrow { width: 10px; height: 10px; }
+    }
+    /* Ultrawide: keep table aligned to the same content grid */
+    @media (min-width: 1600px) {
+      .page.page-wide { max-width: 1600px; }
+      #windTable { min-width: 0; }
+      #windTable th,
+      #windTable td { padding-left: 10px; padding-right: 10px; }
+    }
+    /* Apple Watch / ultra-narrow */
+    @media (max-width: 280px) {
+      .summary { padding: 8px; margin-bottom: 8px; }
+      .summary-actions { display: none; }
+      .table-head { padding: 6px 8px; }
+      .table-head h1 { font-size: 13px; }
+      .live-eyebrow { display: none; }
+      .unit button { padding: 3px 5px; font-size: 12px; }
+      .tools .configure-spots { padding: 3px 6px; font-size: 12px; }
+      #windTable th { font-size: 12px; height: 28px; }
+      #windTable th:not(.time),
+      #windTable td:not(.time) { min-width: 44px; padding: 2px 3px; }
+      #windTable td { height: 28px; }
+      #windTable th.time,
+      #windTable td.time { min-width: 44px; width: 44px; font-size: 12px; }
+      #windTable .cell .wind_arrow { display: none; }
+      #windTable .cell strong { font-size: 12px; }
+      .legend { font-size: 12px; padding: 8px; gap: 6px; }
     }
   </style>
 </head>
 <body>
   {{template "nav" .}}
   <main class="page page-wide">
-    {{if .ReportEN}}
-    <div class="report_en card">{{.ReportEN}}</div>
+    {{if or .ReportBody .Report}}
+    <section class="summary">
+      {{if .ReportStars}}<div class="stars">{{.ReportStars}}</div>{{else}}<div class="stars" aria-hidden="true"></div>{{end}}
+      <div class="rating-copy">
+        <small>{{T "table.ai_summary"}}</small>
+        <p>{{if .ReportBody}}{{.ReportBody}}{{else}}{{.Report}}{{end}}</p>
+      </div>
+      <div class="summary-actions">
+        <span class="summary-updated">◷ {{T "table.updated"}} <b id="updatedTop">{{.Updated}}</b></span>
+        <a href="/prefs">{{T "table.configure_spots"}}</a>
+      </div>
+    </section>
     {{end}}
 
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <td></td>
-            {{range .Headers}}
-            <td data-spot="{{.Key}}"{{if .CSS}} class="{{.CSS}}"{{end}}>
-              <span class="th-full">{{boldKY .Name .Key}}</span>
-              <span class="th-short">{{if eq .Key "ky"}}<b>KY</b>{{else}}{{shortSpot .Key .Name}}{{end}}</span>
-            </td>
-            {{end}}
-          </tr>
-        </thead>
-        <tbody>
-          {{range .Rows}}
-          <tr>
-            <td>{{.Time}}</td>
-            {{range .Cells}}
-              {{if .Empty}}
-              <td></td>
-              {{else}}
-              <td{{if .CSS}} class="{{.CSS}}"{{end}}>
-                <svg class="wind_arrow" version="1.1" viewBox="0 0 100 100"><g transform="rotate({{.WindDir}},50,50) translate(0,5)"><path d="m50,0 -20,30 16,-3 -3,63 14,0 -3,-63 16,3 -20,-30z" fill="black" stroke-width="0"></path></g></svg>
-                {{printf "%.0f" .Wind}}-{{printf "%.0f" .Gust}}{{if .Temp}}<small> {{temp .Temp}}℃</small>{{end}}
-              </td>
-              {{end}}
-            {{end}}
-          </tr>
-          {{end}}
-        </tbody>
-      </table>
-    </div>
+    <section class="table-card">
+      <div class="table-head">
+        <div>
+          <h1>{{T "table.live_heading"}}</h1>
+          <span class="live-dot" aria-hidden="true"></span>
+          <span class="live-eyebrow">{{T "table.live_eyebrow"}}</span>
+        </div>
+        <div class="tools">
+          <div class="updated">{{T "table.updated"}} <b id="updated">{{.Updated}}</b></div>
+          <div class="unit" role="group" aria-label="{{T "table.units"}}">
+            <button type="button" class="active" data-unit="kts">kts</button>
+            <button type="button" data-unit="ms">m/s</button>
+          </div>
+          <a class="configure-spots" href="/prefs">{{T "table.configure_spots"}}</a>
+        </div>
+      </div>
+
+      <div class="wind-table-wrap" id="wind-table-wrap">
+        {{template "wind_table" .}}
+      </div>
+      <script src="/static/prefs-layout.js?v=7"></script>
+      <script>
+        // Apply column prefs immediately after the table so first paint skips
+        // hidden columns / empty rows (avoids large CLS from post-paint hiding).
+        (function () {
+          var spots = {{.CollectSpotDefaults}};
+          var prefs = IkitePrefs.mergeCollectLayout(spots, { saveOnMigrate: true });
+          window.__ikiteTableOrder = IkitePrefs.displayOrder(spots, prefs);
+          IkitePrefs.applyTableLayout(window.__ikiteTableOrder);
+        })();
+      </script>
+
+      <div class="legend">
+        <span>{{T "table.legend_speed"}}</span>
+        <b><i class="c0"></i>0–6</b>
+        <b><i class="c1"></i>6–10</b>
+        <b><i class="c2"></i>10–14</b>
+        <b><i class="c3"></i>14–18</b>
+        <b><i class="c4"></i>18+</b>
+      </div>
+    </section>
   </main>
-  <script src="/static/prefs-layout.js"></script>
+  <div id="slot-detail-pop" class="slot-detail-pop" hidden></div>
   <script>
     (function () {
       var spots = {{.CollectSpotDefaults}};
       var prefs = IkitePrefs.mergeCollectLayout(spots, { saveOnMigrate: true });
-      IkitePrefs.applyTableLayout(IkitePrefs.displayOrder(spots, prefs));
+      var order = window.__ikiteTableOrder || IkitePrefs.displayOrder(spots, prefs);
+      var period = "{{.Period}}";
+      var latestPeriod = "{{.LatestPeriod}}";
+      var unit = 'kts';
+      var refreshTimer = null;
+      var refreshBusy = false;
+      var REFRESH_KEY = 'ikite.autoRefresh';
+
+      function applyLayout() {
+        IkitePrefs.applyTableLayout(order);
+      }
+      function fmt(v) {
+        if (unit === 'ms') return (v * 0.514444).toFixed(1);
+        return String(Math.round(v));
+      }
+      function applyUnit() {
+        document.querySelectorAll('#windTable .speed[data-kts-min]').forEach(function (el) {
+          var lo = parseFloat(el.getAttribute('data-kts-min'));
+          var hi = parseFloat(el.getAttribute('data-kts-max'));
+          if (isNaN(lo) || isNaN(hi)) return;
+          el.textContent = fmt(lo) + '–' + fmt(hi);
+        });
+      }
+      function setUpdated(text) {
+        ['updated', 'updatedTop'].forEach(function (id) {
+          var el = document.getElementById(id);
+          if (el && text) el.textContent = text;
+        });
+      }
+      function applyTableHtml(html) {
+        var wrap = document.getElementById('wind-table-wrap');
+        if (!wrap || !html) return;
+        wrap.innerHTML = html;
+        applyLayout();
+        applyUnit();
+      }
+      function pollTable() {
+        if (refreshBusy) return;
+        refreshBusy = true;
+        var url = '/api/wind/table?p=' + encodeURIComponent(period || '');
+        if (latestPeriod) url += '&since=' + encodeURIComponent(latestPeriod);
+        fetch(url, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+          .then(function (r) { if (!r.ok) throw new Error('refresh failed'); return r.json(); })
+          .then(function (data) {
+            if (data && data.latestPeriod) latestPeriod = data.latestPeriod;
+            if (data && data.changed && data.html) {
+              applyTableHtml(data.html);
+              if (data.updated) setUpdated(data.updated);
+            }
+          })
+          .catch(function () {})
+          .finally(function () { refreshBusy = false; });
+      }
+      function startAutoRefresh() {
+        if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
+        var on = true;
+        try {
+          var saved = localStorage.getItem(REFRESH_KEY);
+          if (saved === '0') on = false;
+          else if (saved !== '1') localStorage.setItem(REFRESH_KEY, '1');
+        } catch (e) {}
+        if (on) {
+          refreshTimer = setInterval(pollTable, 60000);
+        }
+      }
+
+      applyLayout();
+      document.querySelectorAll('[data-unit]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          document.querySelectorAll('[data-unit]').forEach(function (b) { b.classList.remove('active'); });
+          btn.classList.add('active');
+          unit = btn.getAttribute('data-unit');
+          applyUnit();
+        });
+      });
+      startAutoRefresh();
+
+      var pop = document.getElementById('slot-detail-pop');
+      var wrap = document.getElementById('wind-table-wrap');
+      var hideTimer = null;
+      function hidePop() {
+        if (!pop) return;
+        pop.classList.remove('is-open');
+        pop.hidden = true;
+        pop.innerHTML = '';
+      }
+      function showPop(td) {
+        if (!pop) return;
+        var tpl = td.querySelector('template.slot-samples');
+        if (!tpl) return;
+        pop.innerHTML = tpl.innerHTML;
+        pop.hidden = false;
+        pop.classList.add('is-open');
+        var rect = td.getBoundingClientRect();
+        var pad = 8;
+        var left = rect.left + rect.width / 2 - pop.offsetWidth / 2;
+        var top = rect.top - pop.offsetHeight - pad;
+        if (top < pad) top = rect.bottom + pad;
+        if (left < pad) left = pad;
+        if (left + pop.offsetWidth > window.innerWidth - pad) {
+          left = window.innerWidth - pop.offsetWidth - pad;
+        }
+        pop.style.left = Math.round(left) + 'px';
+        pop.style.top = Math.round(top) + 'px';
+      }
+      if (wrap) {
+        wrap.addEventListener('mouseover', function (e) {
+          var td = e.target.closest && e.target.closest('td.has-samples');
+          if (!td || !wrap.contains(td)) return;
+          if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
+          showPop(td);
+        });
+        wrap.addEventListener('mouseout', function (e) {
+          var td = e.target.closest && e.target.closest('td.has-samples');
+          if (!td || !wrap.contains(td)) return;
+          var to = e.relatedTarget;
+          if (to && td.contains(to)) return;
+          hideTimer = setTimeout(hidePop, 80);
+        });
+      }
+      window.addEventListener('scroll', hidePop, true);
+      window.addEventListener('resize', hidePop);
     })();
   </script>
 </body>

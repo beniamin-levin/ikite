@@ -4,34 +4,80 @@
 <link rel="icon" href="/static/favicon-16.png?v=4" type="image/png" sizes="16x16" />
 <link rel="icon" href="/favicon.ico?v=4" sizes="any" />
 <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=4" sizes="180x180" />
-<link rel="stylesheet" href="/static/site.css?v=7" />
-<script src="/static/notifications.js?v=2" defer></script>
+<meta name="theme-color" content="{{if eq (theme) "light"}}#eef3f7{{else}}#061522{{end}}" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="description" content="{{T "meta.description"}}" />
+{{/* Inline site CSS (~5 KiB gzip) so first paint is not blocked by a CSS network request. */}}
+<style>{{siteCSS}}</style>
+<script>window.I18N = {{i18nJS}};</script>
+<script src="/static/notifications.js?v=6" defer></script>
 {{end}}
 
 {{define "nav"}}
-<header class="site-header">
+<header class="site-header" id="site-header">
   <div class="site-header-inner">
-    <a class="brand" href="/">
-      <span class="brand-mark" aria-hidden="true">
-        <svg viewBox="0 0 100 100"><path d="m50,8 -22,30 18,-3 -3,57 14,0 -3,-57 18,3 z"/></svg>
-      </span>
-      <span>ikite</span>
-    </a>
-    <nav class="site-nav site-nav-row1" aria-label="Main">
-      <a href="/"{{if eq .Active "table"}} class="active"{{end}}>Table</a>
-      <a href="/graph"{{if eq .Active "graph"}} class="active"{{end}}>Graph</a>
-      <a href="/camera"{{if eq .Active "camera"}} class="active"{{end}}>Camera</a>
-      <a href="/prediction"{{if eq .Active "prediction"}} class="active"{{end}}>Prediction</a>
-      <a href="/forecast"{{if eq .Active "forecast"}} class="active"{{end}}>Forecast</a>
+    <div class="brand-wrap">
+      <button type="button" class="menu" id="nav-menu" aria-label="{{T "nav.main"}}" aria-expanded="false" aria-controls="site-nav">
+        <span></span><span></span><span></span>
+      </button>
+      <a class="brand" href="/" aria-label="ikite">
+        {{if eq (theme) "light"}}
+        <picture class="brand-logo brand-logo-light">
+          <source srcset="/static/logo-light.webp?v=1" type="image/webp" />
+          <img src="/static/logo-light.png?v=1" width="130" height="48" alt="ikite" decoding="async" fetchpriority="high" />
+        </picture>
+        {{else}}
+        <picture class="brand-logo brand-logo-dark">
+          <source srcset="/static/logo-dark.webp?v=1" type="image/webp" />
+          <img src="/static/logo-dark.png?v=1" width="130" height="48" alt="ikite" decoding="async" fetchpriority="high" />
+        </picture>
+        {{end}}
+      </a>
+    </div>
+    <nav class="site-nav" id="site-nav" aria-label="{{T "nav.main"}}">
+      <a href="/"{{if eq .Active "table"}} class="active"{{end}}>{{T "nav.table"}}</a>
+      <a href="/forecast"{{if eq .Active "forecast"}} class="active"{{end}}>{{T "nav.forecast"}}</a>
+      <a href="/camera"{{if eq .Active "camera"}} class="active"{{end}}>{{T "nav.camera"}}</a>
+      <a href="/prefs"{{if eq .Active "prefs"}} class="active"{{end}}>{{T "nav.prefs"}}</a>
+      <a href="/?p=8h">{{T "nav.8h"}}</a>
+      <a href="/?p=day">{{T "nav.day"}}</a>
+      <a href="/?p=week">{{T "nav.week"}}</a>
+      <a href="/graph"{{if eq .Active "graph"}} class="active"{{end}}>{{T "nav.graph"}}</a>
+      <a href="/prediction"{{if eq .Active "prediction"}} class="active"{{end}}>{{T "nav.prediction"}}</a>
+      <a href="/spots/rating"{{if eq .Active "rating"}} class="active"{{end}}>{{T "nav.rating"}}</a>
+      <a href="/spots/map"{{if eq .Active "map"}} class="active"{{end}}>{{T "nav.map"}}</a>
+      <a href="https://benlevin.fyi/">{{T "nav.about"}}</a>
     </nav>
-    <nav class="site-nav site-nav-row2" aria-label="Main navigation continued">
-      <a href="/spots/rating"{{if eq .Active "rating"}} class="active"{{end}}>Rating</a>
-      <a href="/spots/map"{{if eq .Active "map"}} class="active"{{end}}>Map</a>
-      <a href="/prefs"{{if eq .Active "prefs"}} class="active"{{end}}>Prefs</a>
-      <a href="/?p=day">Day</a>
-      <a href="/?p=week">Week</a>
-      <a href="/about"{{if eq .Active "about"}} class="active"{{end}}>About Me</a>
-    </nav>
+    <div class="chrome-switches">
+      {{if eq (theme) "light"}}
+      <a href="{{themeURL "current"}}" class="theme-toggle" aria-label="{{T "nav.theme_current"}}" title="{{T "nav.theme_current"}}">
+        <svg class="theme-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" fill="currentColor"/>
+        </svg>
+      </a>
+      {{else}}
+      <a href="{{themeURL "light"}}" class="theme-toggle" aria-label="{{T "nav.theme_light"}}" title="{{T "nav.theme_light"}}">
+        <svg class="theme-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M12 18.1a.9.9 0 01.9.9v2.5a.9.9 0 01-1.8 0V19a.9.9 0 01.9-.9zm-5.637-1.737a.9.9 0 011.274 1.274l-2 2a.9.9 0 01-1.274-1.274l2-2zm10 0a.9.9 0 011.205-.061l.069.061 2 2 .061.069a.9.9 0 01-1.266 1.266l-.069-.061-2-2-.061-.069a.9.9 0 01.061-1.205zM12 7.1a4.9 4.9 0 110 9.8 4.9 4.9 0 010-9.8zm0 1.8a3.1 3.1 0 100 6.199A3.1 3.1 0 0012 8.9zm-6.908 2.204a.9.9 0 010 1.792L5 12.9H2.5a.9.9 0 010-1.8H5l.092.005zm16.5 0a.9.9 0 010 1.792l-.092.004H19a.9.9 0 010-1.8h2.5l.092.005zm-3.229-6.74a.9.9 0 011.274 1.273l-2 2a.9.9 0 01-1.274-1.274l2-2zm-14 0a.9.9 0 011.205-.062l.069.061 2 2 .061.069a.9.9 0 01-1.266 1.266l-.069-.061-2-2-.061-.069a.9.9 0 01.061-1.205zM12 1.6a.9.9 0 01.9.9V5a.9.9 0 01-1.8 0V2.5a.9.9 0 01.9-.9z" fill="currentColor"/>
+        </svg>
+      </a>
+      {{end}}
+      <div class="lang-switch" role="group" aria-label="{{T "nav.language"}}">
+        <a href="{{langURL "en"}}" class="lang-btn{{if eq (lang) "en"}} active{{end}}">En</a>
+        <a href="{{langURL "he"}}" class="lang-btn{{if eq (lang) "he"}} active{{end}}">עב</a>
+      </div>
+    </div>
   </div>
 </header>
+<script>
+  (function () {
+    var header = document.getElementById('site-header');
+    var btn = document.getElementById('nav-menu');
+    if (!header || !btn) return;
+    btn.addEventListener('click', function () {
+      var open = header.classList.toggle('nav-open');
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+  })();
+</script>
 {{end}}

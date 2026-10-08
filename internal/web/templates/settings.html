@@ -1,20 +1,28 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{lang}}" dir="{{dir}}" data-theme="{{theme}}">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ikite — Settings</title>
+  <title>{{T "title.settings"}}</title>
   {{template "head_common" .}}
   <style>
-    input, button { padding: 8px; margin: 4px; }
-    table.spots { border-collapse: collapse; margin: 16px 0; width: 100%; background: #fff; }
-    table.spots th, table.spots td { border: 1px solid #ccc; padding: 8px 12px; text-align: left; }
-    table.spots th { background: #f5f5f5; }
+    input, button, select {
+      padding: 8px; margin: 4px;
+      background: var(--input-bg);
+      color: var(--text);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      color-scheme: var(--color-scheme);
+    }
+    button { background: var(--btn-bg); color: var(--btn-fg); cursor: pointer; }
+    table.spots { border-collapse: collapse; margin: 16px 0; width: 100%; background: var(--table-bg); color: var(--text); }
+    table.spots th, table.spots td { border: 1px solid var(--line); padding: 8px 12px; text-align: left; color: var(--text); }
+    table.spots th { background: var(--table-th-bg); }
     table.spots td.center { text-align: center; }
-    .spot-status { margin-left: 8px; font-size: 12px; color: #666; }
-    .spot-status.ok { color: #0a0; }
-    .spot-status.err { color: #c00; }
-    .add-spot { margin: 16px 0 24px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; max-width: 480px; background: #fff; }
+    .spot-status { margin-left: 8px; font-size: 12px; color: var(--muted); }
+    .spot-status.ok { color: var(--ok); }
+    .spot-status.err { color: var(--err); }
+    .add-spot { margin: 16px 0 24px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; max-width: 480px; background: var(--card-bg); }
     .add-spot label { display: block; margin-top: 8px; }
     table.spots select { padding: 4px; font-size: 13px; }
   </style>
@@ -22,56 +30,56 @@
 <body>
   {{template "nav" .}}
   <main class="page">
-  <h1>Settings</h1>
-  <p>Current threshold: {{.Threshold}}</p>
+  <h1>{{T "settings.heading"}}</h1>
+  <p>{{T "settings.current_threshold"}}: {{.Threshold}}</p>
 
   <p style="margin-bottom: 24px;">
-    <label for="forecast_telegram">Send AI forecast messages</label>
+    <label for="forecast_telegram">{{T "settings.forecast_telegram"}}</label>
     <select id="forecast_telegram" name="forecast_telegram">
-      <option value="yes"{{if eq .ForecastTelegram "yes"}} selected{{end}}>Yes</option>
-      <option value="no"{{if eq .ForecastTelegram "no"}} selected{{end}}>No</option>
+      <option value="yes"{{if eq .ForecastTelegram "yes"}} selected{{end}}>{{T "settings.yes"}}</option>
+      <option value="no"{{if eq .ForecastTelegram "no"}} selected{{end}}>{{T "settings.no"}}</option>
     </select>
-    <label for="prediction_telegram" style="margin-left: 12px;">Send summer prediction (Jul–Aug, 11:00)</label>
+    <label for="prediction_telegram" style="margin-left: 12px;">{{T "settings.prediction_telegram"}}</label>
     <select id="prediction_telegram" name="prediction_telegram">
-      <option value="yes"{{if eq .PredictionTelegram "yes"}} selected{{end}}>Yes</option>
-      <option value="no"{{if eq .PredictionTelegram "no"}} selected{{end}}>No</option>
+      <option value="yes"{{if eq .PredictionTelegram "yes"}} selected{{end}}>{{T "settings.yes"}}</option>
+      <option value="no"{{if eq .PredictionTelegram "no"}} selected{{end}}>{{T "settings.no"}}</option>
     </select>
     <br />
-    <label style="margin-top: 8px; display: inline-block;">Wind alert spots</label>
-    <span class="muted" style="margin-left: 8px; font-size: 12px;">message = left | middle | right; only middle triggers alerts</span>
+    <label style="margin-top: 8px; display: inline-block;">{{T "settings.wind_alert_spots"}}</label>
+    <span class="muted" style="margin-left: 8px; font-size: 12px;">{{T "settings.alert_format_hint"}}</span>
     <br />
-    <label for="alert_telegram_spot_left">Left</label>
+    <label for="alert_telegram_spot_left">{{T "settings.left"}}</label>
     <select id="alert_telegram_spot_left" name="alert_telegram_spot_left">
       {{range $.Spots}}
       <option value="{{.Key}}"{{if eq $.AlertTelegramSpotLeft .Key}} selected{{end}}>{{.Name}} ({{.Key}})</option>
       {{end}}
     </select>
-    <label for="alert_telegram_spot" style="margin-left: 12px;">Middle (alert)</label>
+    <label for="alert_telegram_spot" style="margin-left: 12px;">{{T "settings.middle"}}</label>
     <select id="alert_telegram_spot" name="alert_telegram_spot">
       {{range $.Spots}}
       <option value="{{.Key}}"{{if eq $.AlertTelegramSpot .Key}} selected{{end}}>{{.Name}} ({{.Key}})</option>
       {{end}}
     </select>
-    <label for="alert_telegram_spot_right" style="margin-left: 12px;">Right</label>
+    <label for="alert_telegram_spot_right" style="margin-left: 12px;">{{T "settings.right"}}</label>
     <select id="alert_telegram_spot_right" name="alert_telegram_spot_right">
       {{range $.Spots}}
       <option value="{{.Key}}"{{if eq $.AlertTelegramSpotRight .Key}} selected{{end}}>{{.Name}} ({{.Key}})</option>
       {{end}}
     </select>
-    <label for="alert_telegram_interval" style="margin-left: 12px;">Interval</label>
+    <label for="alert_telegram_interval" style="margin-left: 12px;">{{T "settings.interval"}}</label>
     <select id="alert_telegram_interval" name="alert_telegram_interval_min">
       {{range $.AlertIntervals}}
       <option value="{{.Value}}"{{if eq $.AlertTelegramInterval .Value}} selected{{end}}>{{.Label}}</option>
       {{end}}
     </select>
     <br style="margin-top: 8px;" />
-    <label for="forecast_start" style="margin-top: 8px; display: inline-block;">Forecast start</label>
+    <label for="forecast_start" style="margin-top: 8px; display: inline-block;">{{T "settings.forecast_start"}}</label>
     <select id="forecast_start" name="forecast_start_hour">
       {{range $.ForecastHours}}
       <option value="{{.}}"{{if eq $.ForecastStartHour .}} selected{{end}}>{{.}}:00</option>
       {{end}}
     </select>
-    <label for="forecast_end">Stop</label>
+    <label for="forecast_end">{{T "settings.forecast_stop"}}</label>
     <select id="forecast_end" name="forecast_end_hour">
       {{range $.ForecastHours}}
       <option value="{{.}}"{{if eq $.ForecastEndHour .}} selected{{end}}>{{.}}:00</option>
@@ -81,17 +89,17 @@
   </p>
 
   <div style="margin-bottom: 24px;">
-    <h3>Spots <span id="spot-status" class="spot-status"></span></h3>
-    <p class="muted" style="font-size: 0.85rem; margin-bottom: 12px;">Wind table display and order are configured on the <a href="/prefs">Prefs</a> page.</p>
+    <h3>{{T "settings.spots"}} <span id="spot-status" class="spot-status"></span></h3>
+    <p class="muted" style="font-size: 0.85rem; margin-bottom: 12px;">{{T "settings.prefs_hint"}} <a href="/prefs">{{T "settings.prefs_link"}}</a> {{T "settings.page"}}</p>
 
     <div class="add-spot">
-      <strong>Add Windguru spot</strong>
-      <label for="windguru_id">Windguru station ID</label>
-      <input type="number" id="windguru_id" name="windguru_id" min="1" placeholder="e.g. 2763" />
-      <label for="spot_name">Display name</label>
-      <input type="text" id="spot_name" name="spot_name" maxlength="100" placeholder="e.g. Shavei Tzion" />
+      <strong>{{T "settings.add_wg"}}</strong>
+      <label for="windguru_id">{{T "settings.wg_id"}}</label>
+      <input type="number" id="windguru_id" name="windguru_id" min="1" placeholder="{{T "settings.wg_id_ph"}}" />
+      <label for="spot_name">{{T "settings.spot_name"}}</label>
+      <input type="text" id="spot_name" name="spot_name" maxlength="100" placeholder="{{T "settings.spot_name_ph"}}" />
       <p>
-        <button type="button" id="add-spot-btn">Add spot</button>
+        <button type="button" id="add-spot-btn">{{T "settings.add_spot"}}</button>
         <span id="add-spot-status" class="spot-status"></span>
       </p>
     </div>
@@ -99,11 +107,11 @@
     <table class="spots">
       <thead>
         <tr>
-          <th>Spot</th>
-          <th>Save to DB</th>
-          <th>Interval</th>
-          <th>Start</th>
-          <th>Stop</th>
+          <th>{{T "prefs.spot"}}</th>
+          <th>{{T "settings.save_db"}}</th>
+          <th>{{T "settings.col_interval"}}</th>
+          <th>{{T "settings.col_start"}}</th>
+          <th>{{T "settings.col_stop"}}</th>
         </tr>
       </thead>
       <tbody id="spots-body">
@@ -116,7 +124,7 @@
           <td class="center">
             <select class="spot-interval" data-key="{{$sp.Key}}">
               {{range $.CollectIntervals}}
-              <option value="{{.}}"{{if eq $sp.CollectInterval .}} selected{{end}}>{{.}} min</option>
+              <option value="{{.}}"{{if eq $sp.CollectInterval .}} selected{{end}}>{{T "settings.min" .}}</option>
               {{end}}
             </select>
           </td>
@@ -146,15 +154,17 @@
     <button class="wind_btn" name="threshold_btn" value="{{$b}}">{{$b}}</button>
     {{if eq (mod $b 4) 0}}<br/><br/>{{end}}
     {{end}}
-    <button name="threshold_btn" class="wind_btn" value="999">Disable</button>
+    <button name="threshold_btn" class="wind_btn" value="999">{{T "settings.disable"}}</button>
     <br/><br/>
     <input name="threshold" value="10" type="number" style="width:60px" />
-    <button class="wind_btn">Submit</button>
+    <button class="wind_btn">{{T "settings.submit"}}</button>
   </form>
   </main>
 
   <script>
     const settingsPass = {{.Pass}};
+    const I = window.I18N || {};
+    function t(k) { return I[k] || k; }
     function withPass(path) {
       if (!settingsPass) return path;
       return path + (path.indexOf('?') >= 0 ? '&' : '?') + 'pass=' + encodeURIComponent(settingsPass);
@@ -174,9 +184,9 @@
       function setForecastStatus(text, ok) {
         forecastStatus.textContent = text;
         forecastStatus.className = 'spot-status ' + (ok ? 'ok' : 'err');
-        if (ok && text === 'Saved') {
+        if (ok && text === t('common.saved')) {
           setTimeout(function () {
-            if (forecastStatus.textContent === 'Saved') forecastStatus.textContent = '';
+            if (forecastStatus.textContent === t('common.saved')) forecastStatus.textContent = '';
           }, 1500);
         }
       }
@@ -193,16 +203,16 @@
           forecast_end_hour: forecastEnd.value,
           pass: settingsPass
         });
-        setForecastStatus('Saving…', true);
+        setForecastStatus(t('common.saving'), true);
         fetch(withPass('/settings/forecast'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
           body: body.toString()
         }).then(function (res) {
           if (!res.ok) throw new Error('save failed');
-          setForecastStatus('Saved', true);
+          setForecastStatus(t('common.saved'), true);
         }).catch(function () {
-          setForecastStatus('Save failed', false);
+          setForecastStatus(t('common.save_failed'), false);
         });
       }
 
@@ -231,12 +241,12 @@
         const windguruId = wgInput.value.trim();
         const name = nameInput.value.trim();
         if (!windguruId || !name) {
-          setAddStatus('Enter station ID and name', false);
+          setAddStatus(t('settings.enter_id_name'), false);
           return;
         }
         const body = new URLSearchParams({ windguru_id: windguruId, name: name, pass: settingsPass });
         addBtn.disabled = true;
-        setAddStatus('Adding…', true);
+        setAddStatus(t('settings.adding'), true);
         fetch(withPass('/settings/spots/add'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -247,11 +257,11 @@
             return text;
           });
         }).then(function () {
-          setAddStatus('Added — reloading…', true);
+          setAddStatus(t('settings.added_reload'), true);
           location.reload();
         }).catch(function (err) {
           addBtn.disabled = false;
-          setAddStatus(err.message || 'Add failed', false);
+          setAddStatus(err.message || t('settings.add_failed'), false);
         });
       });
     })();
@@ -285,9 +295,9 @@
       function setStatus(text, ok) {
         status.textContent = text;
         status.className = 'spot-status ' + (ok ? 'ok' : 'err');
-        if (ok && text === 'Saved') {
+        if (ok && text === t('common.saved')) {
           setTimeout(function () {
-            if (status.textContent === 'Saved') status.textContent = '';
+            if (status.textContent === t('common.saved')) status.textContent = '';
           }, 1500);
         }
       }
@@ -296,16 +306,16 @@
         clearTimeout(saveTimer);
         saveTimer = setTimeout(function () {
           const body = new URLSearchParams(collectState());
-          setStatus('Saving…', true);
+          setStatus(t('common.saving'), true);
           fetch(withPass('/settings/spots'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: body.toString()
           }).then(function (res) {
             if (!res.ok) throw new Error('save failed');
-            setStatus('Saved', true);
+            setStatus(t('common.saved'), true);
           }).catch(function () {
-            setStatus('Save failed', false);
+            setStatus(t('common.save_failed'), false);
           });
         }, 200);
       }

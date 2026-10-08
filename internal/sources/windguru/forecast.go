@@ -99,10 +99,9 @@ func (c *ForecastClient) fetchSpotForecastsJSON(spotID int, forecastDate time.Ti
 		}
 	}
 
-	day := dateOnly(forecastDate.In(loc))
 	var out []models.WindForecastRow
 	for _, mr := range runs {
-		rows, err := c.fetchModel(spotID, mr, day, loc)
+		rows, err := c.fetchModel(spotID, mr, loc)
 		if err != nil {
 			return nil, err
 		}
@@ -112,12 +111,12 @@ func (c *ForecastClient) fetchSpotForecastsJSON(spotID int, forecastDate time.Ti
 		out = append(out, rows...)
 	}
 	if len(out) == 0 {
-		return nil, fmt.Errorf("forecast_spot %d: no rows for %s", spotID, day.Format("2006-01-02"))
+		return nil, fmt.Errorf("forecast_spot %d: no rows", spotID)
 	}
 	return out, nil
 }
 
-func (c *ForecastClient) fetchModel(spotID int, mr modelRun, day time.Time, loc *time.Location) ([]models.WindForecastRow, error) {
+func (c *ForecastClient) fetchModel(spotID int, mr modelRun, loc *time.Location) ([]models.WindForecastRow, error) {
 	body, err := c.Proxy.Get(forecastModelURL(spotID, mr), wgHeaders(true))
 	if err != nil {
 		return nil, fmt.Errorf("forecast model %d spot %d: %w", mr.IDModel, spotID, err)
@@ -125,10 +124,10 @@ func (c *ForecastClient) fetchModel(spotID int, mr modelRun, day time.Time, loc 
 	if len(body) > 0 && body[0] == '<' {
 		return nil, fmt.Errorf("forecast model %d: blocked (HTML response)", mr.IDModel)
 	}
-	return parseModelForecast(body, spotID, mr, day, loc)
+	return parseModelForecast(body, spotID, mr, loc)
 }
 
-func parseModelForecast(body []byte, spotID int, mr modelRun, day time.Time, loc *time.Location) ([]models.WindForecastRow, error) {
+func parseModelForecast(body []byte, spotID int, mr modelRun, loc *time.Location) ([]models.WindForecastRow, error) {
 	var parsed forecastModelResp
 	if err := json.Unmarshal(body, &parsed); err != nil {
 		return nil, fmt.Errorf("decode forecast model %d: %w", mr.IDModel, err)
@@ -147,11 +146,8 @@ func parseModelForecast(body []byte, spotID int, mr modelRun, day time.Time, loc
 	for i, h := range parsed.Fcst.Hours {
 		period := time.Unix(init+int64(h)*3600, 0).UTC()
 		local := period.In(loc)
-		if !sameCalendarDay(local, day) {
-			continue
-		}
 		row := models.WindForecastRow{
-			ForecastDate: day,
+			ForecastDate: dateOnly(local),
 			WindguruID:   spotID,
 			IDModel:      mr.IDModel,
 			Model:        modelName,

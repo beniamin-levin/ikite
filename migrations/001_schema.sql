@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS `wind_data` (
 CREATE TABLE IF NOT EXISTS `wind_data_log` (
   `period` datetime NOT NULL,
   `location` varchar(32) NOT NULL,
-  `raw` mediumtext NOT NULL,
+  `log` mediumtext NOT NULL,
   PRIMARY KEY (`period`, `location`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

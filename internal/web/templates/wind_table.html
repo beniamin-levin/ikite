@@ -1,0 +1,59 @@
+{{define "wind_table"}}
+<table id="windTable">
+  <thead>
+    <tr>
+      <th class="time">{{T "table.time"}}</th>
+      {{range .Headers}}
+      <th data-spot="{{.Key}}"{{if .IsIMS}} data-ims-of="{{.IMSOf}}"{{end}}{{if or .CSS .IsIMS}} class="{{.CSS}}{{if .IsIMS}} ims-col{{end}}"{{end}}>
+        {{if .WindguruURL}}<a class="th-spot-link" href="{{.WindguruURL}}" target="_blank" rel="noopener" title="Windguru">{{end}}
+        <span class="th-full">{{if .IsIMS}}{{.Name}}{{else}}{{boldKY .Name .Key}}{{end}}</span>
+        <span class="th-short" aria-hidden="true">{{if eq .Key "ky"}}KY{{else}}{{shortSpot .Key .Name}}{{end}}</span>
+        {{if .WindguruURL}}</a>{{end}}
+      </th>
+      {{end}}
+    </tr>
+  </thead>
+  <tbody>
+    {{range .Rows}}
+    <tr>
+      <td class="time">{{.Time}}</td>
+      {{range $i, $cell := .Cells}}
+        {{$hdr := index $.Headers $i}}
+        {{if $cell.Empty}}
+        <td{{if $hdr.IsIMS}} class="ims-col"{{end}}></td>
+        {{else}}
+        <td class="{{$cell.CSS}}{{if $cell.Hot}} highlight{{end}}{{if $cell.Samples}} has-samples{{end}}{{if $hdr.IsIMS}} ims-col{{end}}">
+          <div class="cell">
+            {{if $cell.HasDir}}{{template "wind_arrow" (printf "%.0f" $cell.WindDir)}}{{end}}
+            <strong class="speed" data-kts-min="{{printf "%.0f" $cell.Wind}}" data-kts-max="{{printf "%.0f" $cell.Gust}}">{{printf "%.0f" $cell.Wind}}–{{printf "%.0f" $cell.Gust}}</strong>
+            {{/* Meteo extras only on KY — keeps DOM smaller for PageSpeed without losing the useful station detail. */}}
+            {{if eq $hdr.Key "ky"}}
+            {{if $cell.Temp}}<em class="temp">{{temp $cell.Temp}}°</em>{{end}}
+            {{if $cell.Pressure}}<em class="pressure">{{num $cell.Pressure}}</em>{{end}}
+            {{if $cell.Humidity}}<em class="humidity">{{num $cell.Humidity}}%</em>{{end}}
+            {{end}}
+          </div>
+          {{if $cell.Samples}}
+          <template class="slot-samples">
+            <div class="slot-detail-title">{{T "forecast.slot_detail_title"}}</div>
+            <table>
+              {{range $cell.Samples}}
+              <tr>
+                <td class="t">{{.TimeLabel}}</td>
+                <td>
+                  {{if ne .WindDir 0.0}}{{template "wind_arrow" (printf "%.0f" .WindDir)}}{{end}}
+                  {{printf "%.0f" .Wind}}-{{printf "%.0f" .Gust}}
+                </td>
+              </tr>
+              {{end}}
+            </table>
+          </template>
+          {{end}}
+        </td>
+        {{end}}
+      {{end}}
+    </tr>
+    {{end}}
+  </tbody>
+</table>
+{{end}}

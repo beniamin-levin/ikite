@@ -20,13 +20,13 @@ func TestCardinalDirection(t *testing.T) {
 
 func TestWindCSSClass(t *testing.T) {
 	cases := map[float64]string{
-		7:  "",
-		8:  "wind8",
-		10: "wind10",
-		14: "wind14",
-		16: "wind16",
-		18: "wind18",
-		25: "wind18",
+		5:  "level0",
+		7:  "level1",
+		10: "level2",
+		14: "level3",
+		16: "level3",
+		18: "level4",
+		25: "level4",
 	}
 	for wind, want := range cases {
 		if got := WindCSSClass(wind); got != want {

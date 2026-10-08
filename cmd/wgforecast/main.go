@@ -10,6 +10,7 @@ import (
 	"github.com/ben/ikite-go/internal/collector"
 	"github.com/ben/ikite-go/internal/config"
 	"github.com/ben/ikite-go/internal/db"
+	"github.com/ben/ikite-go/internal/notify/telegram"
 	"github.com/ben/ikite-go/internal/sources/windguru"
 	"github.com/ben/ikite-go/internal/store"
 )
@@ -33,11 +34,19 @@ func main() {
 	}
 	defer sqlDB.Close()
 
+	st := store.New(sqlDB)
+	notify := &collector.ForecastGustNotifyService{
+		Cfg:      cfg,
+		Store:    st,
+		Telegram: telegram.New(cfg.TelegramAlertToken, cfg.TelegramAlertChatID),
+		Log:      log,
+	}
 	svc := &collector.WGForecastService{
-		Cfg:   cfg,
-		Store: store.New(sqlDB),
-		WG:    windguru.NewForecast(begetproxy.New(cfg.BegetProxyURL, cfg.BegetProxySecret)),
-		Log:   log,
+		Cfg:    cfg,
+		Store:  st,
+		WG:     windguru.NewForecast(begetproxy.New(cfg.BegetProxyURL, cfg.BegetProxySecret)),
+		Log:    log,
+		Notify: notify,
 	}
 
 	if err := svc.Run(time.Now(), collector.WGForecastOptions{Force: *force}); err != nil {

@@ -1,21 +1,35 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{lang}}" dir="{{dir}}" data-theme="{{theme}}">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ikite — About Me</title>
+  <title>{{T "title.about"}}</title>
   {{template "head_common" .}}
   <style>
+    .page-about {
+      max-width: 820px;
+      margin: 0 auto;
+      text-align: center;
+    }
+    .page-about h1 {
+      text-align: center;
+    }
     .about-intro {
       margin: 0 0 16px;
       font-size: 0.9rem;
       color: var(--muted);
+      text-align: center;
     }
     .about-intro a { font-weight: 600; }
     .cv-content {
       max-width: 820px;
+      margin: 0 auto;
+      text-align: left;
       line-height: 1.55;
       font-size: 0.95rem;
+    }
+    html[dir="rtl"] .cv-content {
+      text-align: right;
     }
     .cv-content > p:first-child strong {
       font-size: 1.65rem;
@@ -72,12 +86,12 @@
 </head>
 <body>
   {{template "nav" .}}
-  <main class="page">
-    <h1>About Me</h1>
-    <p class="about-intro">CV sourced from <a href="{{.Source}}" target="_blank" rel="noopener noreferrer">GitHub</a>.</p>
+  <main class="page page-about">
+    <h1>{{T "about.heading"}}</h1>
+    <p class="about-intro">{{T "about.intro"}} <a href="{{.Source}}" target="_blank" rel="noopener noreferrer">{{T "about.github"}}</a>.</p>
     <article class="card cv-content">
       {{if .Error}}
-      <p class="about-error">{{.Error}} <a href="{{.Source}}" target="_blank" rel="noopener noreferrer">View on GitHub</a></p>
+      <p class="about-error">{{.Error}} <a href="{{.Source}}" target="_blank" rel="noopener noreferrer">{{T "about.view_github"}}</a></p>
       {{else}}
       {{.Content}}
       {{end}}

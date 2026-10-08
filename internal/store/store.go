@@ -35,8 +35,9 @@ func (s *Store) InsertWind(r models.WindReading) error {
 }
 
 func (s *Store) InsertWindLog(period time.Time, location, raw string) error {
+	// Legacy schema uses column name `log` (not `raw`).
 	_, err := s.DB.Exec(`
-		INSERT IGNORE INTO wind_data_log (period, location, raw)
+		INSERT IGNORE INTO wind_data_log (period, location, log)
 		VALUES (?, ?, ?)`, period, location, raw)
 	return err
 }
@@ -276,6 +277,48 @@ func (s *Store) LatestWindPeriod(location string) (time.Time, error) {
 	return period, err
 }
 
+// LatestWindPeriodAny returns the newest wind_data.period across all locations.
+func (s *Store) LatestWindPeriodAny() (time.Time, error) {
+	var period sql.NullTime
+	err := s.DB.QueryRow(`SELECT MAX(period) FROM wind_data`).Scan(&period)
+	if err != nil {
+		return time.Time{}, err
+	}
+	if !period.Valid {
+		return time.Time{}, nil
+	}
+	return period.Time, nil
+}
+
+func (s *Store) LatestWindReading(location string) (*models.WindReading, error) {
+	var r models.WindReading
+	var temp, humidity, pressure sql.NullFloat64
+	err := s.DB.QueryRow(`
+		SELECT period, location, wind, gust, wind_dir, temp, humidity, pressure
+		FROM wind_data WHERE location = ?
+		ORDER BY period DESC LIMIT 1`, location).
+		Scan(&r.Period, &r.Location, &r.Wind, &r.Gust, &r.WindDir, &temp, &humidity, &pressure)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if temp.Valid {
+		t := temp.Float64
+		r.Temp = &t
+	}
+	if humidity.Valid {
+		h := humidity.Float64
+		r.Humidity = &h
+	}
+	if pressure.Valid {
+		p := pressure.Float64
+		r.Pressure = &p
+	}
+	return &r, nil
+}
+
 func (s *Store) LatestWind(location string) (float64, error) {
 	var wind float64
 	err := s.DB.QueryRow(`
@@ -299,6 +342,49 @@ func (s *Store) ListWind(from, to time.Time) ([]models.WindReading, error) {
 	defer rows.Close()
 
 	var out []models.WindReading
+	for rows.Next() {
+		var r models.WindReading
+		var temp, humidity, pressure sql.NullFloat64
+		if err := rows.Scan(&r.Period, &r.Location, &r.Wind, &r.Gust, &r.WindDir, &temp, &humidity, &pressure); err != nil {
+			return nil, err
+		}
+		if temp.Valid {
+			t := temp.Float64
+			r.Temp = &t
+		}
+		if humidity.Valid {
+			h := humidity.Float64
+			r.Humidity = &h
+		}
+		if pressure.Valid {
+			p := pressure.Float64
+			r.Pressure = &p
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+// ListWindByLocation returns newest-first readings for one location, limited to limit rows.
+func (s *Store) ListWindByLocation(location string, limit int) ([]models.WindReading, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	if limit > 500 {
+		limit = 500
+	}
+	rows, err := s.DB.Query(`
+		SELECT period, location, wind, gust, wind_dir, temp, humidity, pressure
+		FROM wind_data
+		WHERE location = ?
+		ORDER BY period DESC
+		LIMIT ?`, location, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make([]models.WindReading, 0, limit)
 	for rows.Next() {
 		var r models.WindReading
 		var temp, humidity, pressure sql.NullFloat64

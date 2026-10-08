@@ -1,7 +1,13 @@
 [Unit]
 Description=ikite-go wind dashboard
 After=network.target mysql.service
-Requires=mysql.service
+# Wants=, deliberately not Requires=. Requires= propagates MySQL's *stop* to this
+# unit: on 2026-09-01 unattended-upgrades upgraded mysql-server, systemd stopped
+# MySQL, dragged ikite-server down with it, and never brought it back (a unit
+# stopped as a dependency is not a failure, so Restart= does not apply). The site
+# served 502s for two days. Wants= keeps the boot-time pull-in and the After=
+# ordering without the stop propagation.
+Wants=mysql.service
 
 [Service]
 Type=simple
@@ -13,7 +19,9 @@ EnvironmentFile=-/etc/ikite-go/server.env
 Environment=MIGRATE=1
 Environment=MIGRATIONS_PATH=/opt/ikite-go/migrations
 ExecStart=/opt/ikite-go/bin/server
-Restart=on-failure
+# always, not on-failure: the server exits non-zero when MySQL is unreachable at
+# startup, and should also come back from any clean exit.
+Restart=always
 RestartSec=5
 
 # Hardening

@@ -1,141 +1,729 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{lang}}" dir="{{dir}}" data-theme="{{theme}}">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ikite — Beach Cameras</title>
+  <title>{{T "title.camera"}}</title>
   {{template "head_common" .}}
   <style>
-    .cam-picker {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-      margin: 12px 0 18px;
+    .page.camera-page {
+      max-width: none;
+      width: 100%;
+      box-sizing: border-box;
     }
-    .cam-picker a {
-      display: inline-block;
-      padding: 6px 10px;
+    .camera-toolbar {
+      border: 1px solid var(--line);
+      background: var(--cam-page-bg);
+      border-radius: 16px;
+      padding: 10px 12px;
+      box-shadow: var(--shadow);
+      margin-bottom: 14px;
+    }
+    .camera-toolbar-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      min-height: 40px;
+    }
+    .title-inline {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      min-width: 0;
+      flex-wrap: wrap;
+    }
+    .eyebrow {
+      color: var(--cam-accent);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      margin: 0;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+    .title-inline h1 {
+      font-size: 22px;
+      margin: 0;
+      white-space: nowrap;
+    }
+    .subtitle { display: none; }
+    .head-actions { display: flex; gap: 8px; flex-shrink: 0; }
+    .btn-secondary {
+      border: 1px solid var(--line);
+      background: var(--cam-btn-bg);
+      color: var(--cam-btn-fg);
+      border-radius: 10px;
+      padding: 7px 11px;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+    .btn-secondary:hover { color: var(--text); text-decoration: none; }
+
+    .camera-spots {
+      display: flex;
+      flex-wrap: nowrap;
+      gap: 6px;
+      margin-top: 10px;
+      overflow-x: auto;
+      scrollbar-width: none;
+      -webkit-overflow-scrolling: touch;
+    }
+    .camera-spots::-webkit-scrollbar { display: none; }
+    .camera-spots a {
+      display: inline-flex;
+      align-items: center;
+      flex: 0 0 auto;
+      min-height: 34px;
+      padding: 0 12px;
       border: 1px solid var(--line);
       border-radius: 999px;
-      background: #fff;
-      color: var(--ink);
-      font-size: 0.9rem;
+      background: var(--cam-tab-bg);
+      color: var(--cam-tab-fg);
       font-weight: 600;
+      font-size: 12px;
+      white-space: nowrap;
+      text-decoration: none;
+      transition: 0.2s;
+    }
+    .camera-spots a:hover {
+      border-color: var(--fc-btn);
+      color: var(--text);
       text-decoration: none;
     }
-    .cam-picker a:hover { background: var(--accent-soft); color: var(--accent); text-decoration: none; }
-    .cam-picker a.active {
-      background: var(--accent);
-      border-color: var(--accent);
-      color: #fff;
+    .camera-spots a.active {
+      background: linear-gradient(180deg, var(--fc-btn), var(--fc-btn-deep));
+      border-color: var(--fc-btn);
+      color: var(--on-accent);
+      box-shadow: 0 7px 18px rgba(44, 128, 242, 0.22);
     }
-    .cams { display: grid; gap: 20px; }
-    .cams-group {
-      margin: 0 0 4px;
-      font-size: 0.85rem;
-      font-weight: 600;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
-      opacity: 0.7;
+    .camera-spots a .dot {
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      background: var(--cam-live);
+      border-radius: 50%;
+      margin-right: 7px;
     }
-    .cam h2 {
-      margin: 0 0 8px;
-      font-size: 1.05rem;
-      font-weight: 600;
-    }
-    iframe {
+
+    .camera-card {
+      border: 1px solid var(--line);
+      background: var(--cam-card-bg);
+      border-radius: 20px;
+      box-shadow: var(--shadow);
+      padding: 14px;
       width: 100%;
-      max-width: 100%;
-      border: 0;
-      border-radius: 12px;
+    }
+    .camera-card-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+      gap: 10px;
+      min-height: 36px;
+    }
+    .camera-card-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+      flex-wrap: wrap;
+    }
+    .live-line {
+      display: inline-flex;
+      align-items: center;
+      color: var(--cam-live);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .live-line span {
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--cam-live);
+      margin-right: 6px;
+    }
+    .camera-card-head h2 {
+      font-size: 20px;
+      margin: 0;
+      white-space: nowrap;
+    }
+    .camera-card-head p {
+      color: var(--muted);
+      margin: 0;
+      font-size: 12px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .camera-card-head .meta-sep {
+      color: var(--cam-muted);
+      margin: 0 2px;
+    }
+    .camera-actions { display: flex; gap: 8px; flex-shrink: 0; }
+    .camera-actions button {
+      width: 36px;
+      height: 36px;
+      border: 1px solid var(--line);
+      background: var(--cam-panel);
+      color: var(--text);
+      border-radius: 10px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    .video-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .video-pane {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      min-width: 0;
+    }
+    .video-stack-label {
+      margin: 0;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      min-height: 1.2em;
+    }
+    .video-stack-label.is-spacer {
+      visibility: hidden;
+      user-select: none;
+    }
+    .video-shell {
+      position: relative;
+      overflow: hidden;
+      border-radius: 16px;
       aspect-ratio: 16 / 9;
-      background: #111;
+      min-height: 420px;
+      background: var(--cam-stage);
+    }
+    .video-shell.secondary {
+      min-height: 320px;
+    }
+    @media (min-width: 1051px) {
+      .video-stack:has(.video-pane + .video-pane) {
+        flex-direction: row;
+        align-items: stretch;
+      }
+      .video-stack:has(.video-pane + .video-pane) .video-pane {
+        flex: 1 1 0;
+      }
+      .video-stack:has(.video-pane + .video-pane) .video-shell,
+      .video-stack:has(.video-pane + .video-pane) .video-shell.secondary {
+        min-height: 0;
+        height: 100%;
+      }
+    }
+    .video-shell iframe {
+      width: 100%;
+      height: 100%;
+      border: 0;
       display: block;
+      background: #111;
+    }
+    .video-gradient {
+      pointer-events: none;
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, rgba(0,0,0,.18), transparent 30%, rgba(0,0,0,.35));
+      z-index: 2;
+    }
+
+    .cam-wind {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      left: auto;
+      z-index: 5;
+      box-sizing: border-box;
+      display: inline-flex;
+      align-items: stretch;
+      width: max-content;
+      max-width: calc(100% - 32px);
+      padding: 20px 14px 10px;
+      border-radius: 14px;
+      background: rgba(248, 251, 253, 0.93);
+      box-shadow: 0 8px 22px rgba(0, 0, 0, 0.18);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      color: #102335;
+      pointer-events: none;
+    }
+    .cam-history {
+      position: absolute;
+      top: 0;
+      left: 0;
+      bottom: 0;
+      z-index: 6;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      width: 92px;
+      max-width: 28%;
+      margin: 0;
+      padding: 0;
+      border: 0;
+      border-right: 1px solid rgba(148, 163, 184, 0.35);
+      border-radius: 0;
+      background: rgba(8, 18, 30, 0.82);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      color: #e8eef5;
+      pointer-events: auto;
+      overflow: hidden;
+    }
+    .cam-history-head {
+      flex: 0 0 auto;
+      padding: 8px 6px 6px;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.28);
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #93c5fd;
+      text-align: center;
+    }
+    .cam-history-list {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-x: hidden;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(148, 163, 184, 0.55) transparent;
+      -webkit-overflow-scrolling: touch;
+    }
+    .cam-history-list::-webkit-scrollbar { width: 5px; }
+    .cam-history-list::-webkit-scrollbar-thumb {
+      background: rgba(148, 163, 184, 0.55);
+      border-radius: 999px;
+    }
+    .cam-history-row {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 1px;
+      padding: 6px 5px;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+      text-align: center;
+      line-height: 1.15;
+    }
+    .cam-history-row:first-child {
+      background: rgba(34, 197, 94, 0.14);
+    }
+    .cam-history-time {
+      font-size: 10px;
+      font-weight: 700;
+      color: #cbd5e1;
+    }
+    .cam-history-speed {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      margin-top: 2px;
+      font-size: 12px;
+      font-weight: 800;
+      color: #f8fafc;
+      white-space: nowrap;
+    }
+    .cam-history-speed .wind_arrow {
+      width: 9px;
+      height: 9px;
+      color: #e2e8f0;
+    }
+    .cam-history-row.level0 .cam-history-speed { color: #94a3b8; }
+    .cam-history-row.level1 .cam-history-speed { color: #7dd3fc; }
+    .cam-history-row.level2 .cam-history-speed { color: #86efac; }
+    .cam-history-row.level3 .cam-history-speed { color: #fde047; }
+    .cam-history-row.level4 .cam-history-speed { color: #fb7185; }
+    .cam-history-empty {
+      padding: 14px 8px;
+      text-align: center;
+      font-size: 10px;
+      color: #94a3b8;
+    }
+    .cam-wind.is-stale .cam-wind-live-dot,
+    .cam-wind.is-stale .cam-wind-live-label { color: #94a3b8; }
+    .cam-wind.is-stale .cam-wind-live-dot { background: #94a3b8; }
+    .cam-wind-live {
+      position: absolute;
+      top: 6px;
+      left: 10px;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      line-height: 1.2;
+    }
+    .cam-wind-live-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #52d979;
+    }
+    .cam-wind-live-label { color: #16a34a; }
+    .cam-wind-live-time { color: #334155; font-weight: 600; letter-spacing: 0; }
+    .cam-wind-live-sep { color: #94a3b8; font-weight: 500; }
+    .cam-wind-col {
+      flex: 0 0 auto;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2px 10px 0;
+    }
+    .cam-wind-col + .cam-wind-col { border-left: 1px solid #dbe3ee; }
+    .cam-wind-value-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 2px;
+      line-height: 1;
+    }
+    .cam-wind-value {
+      font-size: 1.7rem;
+      font-weight: 800;
+      color: #16a34a;
+      letter-spacing: -0.02em;
+    }
+    .cam-wind-unit {
+      margin-top: 3px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #334155;
+    }
+    .cam-wind-label {
+      margin-top: 3px;
+      font-size: 0.65rem;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      color: #1e293b;
+    }
+    .cam-wind-dir {
+      flex-direction: row;
+      gap: 8px;
+      justify-content: flex-start;
+      padding: 2px 10px 0 12px;
+    }
+    .cam-wind-compass { width: 40px; height: 40px; flex: 0 0 auto; }
+    .cam-wind-compass .ring { fill: none; stroke: #93c5fd; stroke-width: 2; }
+    .cam-wind-compass .tick { stroke: #bfdbfe; stroke-width: 1.2; }
+    .cam-wind-compass .cardinal {
+      fill: #94a3b8;
+      font-size: 7px;
+      font-weight: 700;
+      text-anchor: middle;
+      dominant-baseline: central;
+    }
+    .cam-wind-compass .needle { fill: #0d9488; }
+    .cam-wind-dir-text {
+      font-size: 0.88rem;
+      font-weight: 700;
+      color: #1e293b;
+      white-space: nowrap;
+    }
+
+    @media (max-width: 1050px) {
+      .video-shell { min-height: 360px; }
+    }
+    @media (max-width: 760px) {
+      .camera-toolbar { padding: 9px; border-radius: 14px; }
+      .camera-toolbar-top {
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .title-inline h1 { font-size: 18px; }
+      .eyebrow { font-size: 10px; }
+      .head-actions { width: 100%; }
+      .head-actions .btn-secondary { flex: 1; text-align: center; padding: 8px 10px; }
+      .camera-spots { margin-top: 8px; }
+      .camera-spots a { min-height: 32px; padding: 0 11px; font-size: 11px; }
+      .camera-card { padding: 10px; }
+      .camera-card-head { align-items: center; gap: 8px; }
+      .camera-card-title { gap: 8px; }
+      .camera-card-head h2 { font-size: 17px; }
+      .camera-card-head p { font-size: 11px; max-width: 46vw; }
+      .camera-actions button { width: 34px; height: 34px; }
+      .video-shell { min-height: 0; }
+      .cam-wind { transform: scale(0.82); transform-origin: right top; top: 10px; right: 10px; left: auto; }
+      .cam-history { width: 78px; }
+    }
+    @media (max-width: 480px) {
+      .cam-wind {
+        transform: scale(0.72);
+        max-width: none;
+      }
+      .cam-history { width: 70px; }
+      .cam-history-speed { font-size: 11px; }
     }
   </style>
 </head>
 <body>
   {{template "nav" .}}
-  <main class="page">
-    <h1>Beach cameras</h1>
-    <nav class="cam-picker" aria-label="Camera">
-      {{range .CamOptions}}
-      <a href="/camera?cam={{.Key}}"{{if .Active}} class="active"{{end}}>{{.Name}}</a>
-      {{end}}
-    </nav>
-    <div class="cams">
-      {{if or .ShowAll (eq .Cam "kh") (eq .Cam "ky") (eq .Cam "bg") (eq .Cam "nirvana") (eq .Cam "mm") (eq .Cam "nahariya")}}
-      {{if .ShowAll}}<p class="cams-group">Mediterranean — North</p>{{end}}
-      {{end}}
+  <main class="page page-wide camera-page">
+    <section class="camera-toolbar">
+      <div class="camera-toolbar-top">
+        <div class="title-inline">
+          <h1>{{T "camera.heading"}}</h1>
+          <p class="eyebrow">{{T "camera.eyebrow"}}</p>
+        </div>
+        <div class="head-actions">
+          <a class="btn-secondary" href="/spots/map">{{T "camera.view_map"}}</a>
+          <a class="btn-secondary" href="/prefs">{{T "camera.manage_spots"}}</a>
+        </div>
+      </div>
+      <nav class="camera-spots" aria-label="{{T "camera.picker"}}">
+        {{range .CamOptions}}
+        <a href="/camera?cam={{.Key}}"{{if .Active}} class="active"{{end}}>
+          {{if .Live}}<span class="dot" aria-hidden="true"></span>{{end}}{{.Name}}
+        </a>
+        {{end}}
+      </nav>
+    </section>
 
-      {{if or .ShowAll (eq .Cam "kh")}}
-      <section class="cam">
-        <h2>Kiryat Haim</h2>
-        <iframe src="https://ipcamlive.com/player/player.php?alias=6469b4554f45e&amp;autoplay=1&amp;skin=white&amp;hidelink=true&amp;disablereportbutton=true&amp;disableautofullscreen=1&amp;disablezoombutton=1&amp;disableframecapture=1&amp;disableuserpause=1" title="Kiryat Haim beach camera" allow="autoplay; fullscreen" allowfullscreen loading="eager"></iframe>
-      </section>
-      {{end}}
+    <article class="camera-card">
+      <div class="camera-card-head">
+        <div class="camera-card-title">
+          <h2>{{.Featured.Name}}</h2>
+          {{if .Featured.Live}}
+          <div class="live-line"><span></span>{{T "camera.live_now"}}</div>
+          {{end}}
+          <p>{{T "camera.meta_live"}}</p>
+        </div>
+        <div class="camera-actions">
+          <button type="button" id="fullscreenBtn" title="{{T "camera.fullscreen"}}" aria-label="{{T "camera.fullscreen"}}">⛶</button>
+        </div>
+      </div>
 
-      {{if or .ShowAll (eq .Cam "ky")}}
-      <section class="cam">
-        <h2>Kiryat Yam</h2>
-        <iframe src="https://www.youtube.com/embed/EfU0pofsmew" title="Kiryat Yam beach camera" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen loading="lazy"></iframe>
-      </section>
+      <div class="video-stack">
+      <div class="video-pane">
+      {{if .Featured.EmbedLabel}}
+      <p class="video-stack-label">{{.Featured.EmbedLabel}}</p>
+      {{else if and .Featured.ExtraEmbed .Featured.ExtraLabel}}
+      {{/* Reserve the label's height so an unlabelled first pane still lines up. */}}
+      <p class="video-stack-label is-spacer" aria-hidden="true">{{.Featured.ExtraLabel}}</p>
       {{end}}
+      <div class="video-shell" id="videoShell">
+        <iframe
+          id="featuredFrame"
+          src="{{.Featured.Embed}}"
+          title="{{if .Featured.EmbedLabel}}{{.Featured.Name}} · {{.Featured.EmbedLabel}}{{else}}{{.Featured.Name}}{{end}}"
+          allow="autoplay; fullscreen; accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          allowfullscreen
+          loading="eager"></iframe>
+        <div class="video-gradient" aria-hidden="true"></div>
 
-      {{if or .ShowAll (eq .Cam "bg")}}
-      <section class="cam">
-        <h2>Bat Galim</h2>
-        <iframe src="https://ipcamlive.com/player/player.php?alias=60997a5d22ca9&amp;autoplay=0&amp;skin=white&amp;hidelink=true&amp;disablereportbutton=true&amp;disableautofullscreen=1&amp;disablezoombutton=1&amp;disableframecapture=1" title="Bat Galim beach camera" allow="autoplay; fullscreen" allowfullscreen loading="lazy"></iframe>
-      </section>
-      {{end}}
+        {{if .Featured.HasWind}}
+        <aside class="cam-history" id="kh-cam-history" aria-label="{{T "camera.recent_readings"}}">
+          <div class="cam-history-head">{{T "camera.recent_short"}}</div>
+          <div class="cam-history-list" id="kh-history-list">
+            <div class="cam-history-empty">{{T "camera.recent_loading"}}</div>
+          </div>
+        </aside>
+        <div class="cam-wind" id="kh-cam-wind" hidden aria-live="polite">
+          <div class="cam-wind-live">
+            <span class="cam-wind-live-dot" aria-hidden="true"></span>
+            <span class="cam-wind-live-label">LIVE</span>
+            <span class="cam-wind-live-sep">·</span>
+            <span class="cam-wind-live-time" id="kh-wind-time">--:--</span>
+          </div>
+          <div class="cam-wind-col">
+            <div class="cam-wind-value-row">
+              <span class="cam-wind-value" id="kh-wind-speed">–</span>
+              <span class="cam-wind-unit">kt</span>
+            </div>
+            <div class="cam-wind-label">WIND</div>
+          </div>
+          <div class="cam-wind-col">
+            <div class="cam-wind-value-row">
+              <span class="cam-wind-value" id="kh-wind-gust">–</span>
+              <span class="cam-wind-unit">kt</span>
+            </div>
+            <div class="cam-wind-label">GUST</div>
+          </div>
+          <div class="cam-wind-col cam-wind-dir">
+            <svg class="cam-wind-compass" viewBox="0 0 48 48" aria-hidden="true">
+              <circle class="ring" cx="24" cy="24" r="18"></circle>
+              <line class="tick" x1="24" y1="7" x2="24" y2="10"></line>
+              <line class="tick" x1="41" y1="24" x2="38" y2="24"></line>
+              <line class="tick" x1="24" y1="41" x2="24" y2="38"></line>
+              <line class="tick" x1="7" y1="24" x2="10" y2="24"></line>
+              <text class="cardinal" x="24" y="13">N</text>
+              <text class="cardinal" x="36" y="25">E</text>
+              <text class="cardinal" x="24" y="36">S</text>
+              <text class="cardinal" x="12" y="25">W</text>
+              <g class="needle" id="kh-wind-needle" transform="rotate(0 24 24)">
+                <path d="M24 12 L28 28 L24 25 L20 28 Z"></path>
+              </g>
+            </svg>
+            <span class="cam-wind-dir-text" id="kh-wind-dir">–</span>
+          </div>
+        </div>
+        {{end}}
+      </div>
+      </div>
 
-      {{if or .ShowAll (eq .Cam "nirvana")}}
-      <section class="cam">
-        <h2>Haifa Nirvana</h2>
-        <iframe src="https://ipcamlive.com/player/player.php?alias=60acaa1aeee83&amp;autoplay=0&amp;skin=white&amp;hidelink=true&amp;disablereportbutton=true&amp;disableautofullscreen=1&amp;disablezoombutton=1&amp;disableframecapture=1" title="Haifa Nirvana beach camera" allow="autoplay; fullscreen" allowfullscreen loading="lazy"></iframe>
-      </section>
+      {{if .Featured.ExtraEmbed}}
+      <div class="video-pane">
+      {{if .Featured.ExtraLabel}}<p class="video-stack-label">{{.Featured.ExtraLabel}}</p>{{end}}
+      <div class="video-shell secondary">
+        <iframe
+          id="extraFrame"
+          src="{{.Featured.ExtraEmbed}}"
+          title="{{if .Featured.ExtraLabel}}{{.Featured.ExtraLabel}}{{else}}{{.Featured.Name}}{{end}}"
+          allow="autoplay; fullscreen; accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          allowfullscreen
+          loading="lazy"></iframe>
+        <div class="video-gradient" aria-hidden="true"></div>
+      </div>
+      </div>
       {{end}}
-
-      {{if or .ShowAll (eq .Cam "mm")}}
-      <section class="cam">
-        <h2>Maagan Michael</h2>
-        <iframe src="https://ipcamlive.com/player/player.php?alias=5b17c8292282c&amp;autoplay=0&amp;skin=white&amp;hidelink=true&amp;disablereportbutton=true&amp;disableautofullscreen=1&amp;disablezoombutton=1&amp;disableframecapture=1" title="Maagan Michael beach camera" allow="autoplay; fullscreen" allowfullscreen loading="lazy"></iframe>
-      </section>
-      {{end}}
-
-      {{if or .ShowAll (eq .Cam "nahariya")}}
-      <section class="cam">
-        <h2>Nahariya (Sokolov)</h2>
-        <iframe src="https://ipcamlive.com/player/player.php?alias=65f00165e60f4&amp;autoplay=0&amp;skin=white&amp;hidelink=true&amp;disablereportbutton=true&amp;disableautofullscreen=1&amp;disablezoombutton=1&amp;disableframecapture=1" title="Nahariya Sokolov beach camera" allow="autoplay; fullscreen" allowfullscreen loading="lazy"></iframe>
-      </section>
-      {{end}}
-
-      {{if or .ShowAll (eq .Cam "zvulun") (eq .Cam "hilton")}}
-      {{if .ShowAll}}<p class="cams-group">Mediterranean — Center</p>{{end}}
-      {{end}}
-
-      {{if or .ShowAll (eq .Cam "zvulun")}}
-      <section class="cam">
-        <h2>Herzliya Zvulun</h2>
-        <iframe src="https://ipcamlive.com/player/player.php?alias=634548590c353&amp;autoplay=0&amp;skin=white&amp;hidelink=true&amp;disablereportbutton=true&amp;disableautofullscreen=1&amp;disablezoombutton=1&amp;disableframecapture=1" title="Herzliya Zvulun beach camera" allow="autoplay; fullscreen" allowfullscreen loading="lazy"></iframe>
-      </section>
-      {{end}}
-
-      {{if or .ShowAll (eq .Cam "hilton")}}
-      <section class="cam">
-        <h2>Tel Aviv Hilton</h2>
-        <iframe src="https://ipcamlive.com/player/player.php?alias=63454584c4c3c&amp;autoplay=0&amp;skin=white&amp;hidelink=true&amp;disablereportbutton=true&amp;disableautofullscreen=1&amp;disablezoombutton=1&amp;disableframecapture=1" title="Tel Aviv Hilton beach camera" allow="autoplay; fullscreen" allowfullscreen loading="lazy"></iframe>
-      </section>
-      {{end}}
-
-      {{if or .ShowAll (eq .Cam "kineret")}}
-      {{if .ShowAll}}<p class="cams-group">Kineret</p>{{end}}
-      <section class="cam">
-        <h2>Kineret (South Beach / Ambil-Yam)</h2>
-        <iframe src="https://ipcamlive.com/player/player.php?alias=61a4836d911ac&amp;autoplay=0&amp;skin=white&amp;hidelink=true&amp;disablereportbutton=true&amp;disableautofullscreen=1&amp;disablezoombutton=1&amp;disableframecapture=1" title="Kineret South Beach camera" allow="autoplay; fullscreen" allowfullscreen loading="lazy"></iframe>
-      </section>
-      {{end}}
-    </div>
+      </div>
+    </article>
   </main>
+
+  <script>
+    (function () {
+      var shell = document.getElementById('videoShell');
+      var fsBtn = document.getElementById('fullscreenBtn');
+      if (fsBtn && shell) {
+        fsBtn.addEventListener('click', function () {
+          if (document.fullscreenElement) {
+            document.exitFullscreen();
+          } else if (shell.requestFullscreen) {
+            shell.requestFullscreen();
+          }
+        });
+      }
+
+      var root = document.getElementById('kh-cam-wind');
+      if (!root) return;
+      var speedEl = document.getElementById('kh-wind-speed');
+      var gustEl = document.getElementById('kh-wind-gust');
+      var dirEl = document.getElementById('kh-wind-dir');
+      var timeEl = document.getElementById('kh-wind-time');
+      var needleEl = document.getElementById('kh-wind-needle');
+      var historyList = document.getElementById('kh-history-list');
+      var slug = 'pick-up-surf';
+      var dirs = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+      var latestHistoryPeriod = '';
+      var historyBusy = false;
+      var arrowHTML = '<i class="wind_arrow" style="--dir:ANGLEdeg" aria-hidden="true"></i>';
+
+      function cardinal(deg) {
+        var d = ((deg % 360) + 360) % 360;
+        return dirs[Math.round(d / 22.5) % 16];
+      }
+      function formatTime(spot) {
+        if (spot.Time && typeof spot.Time === 'string') {
+          var m = spot.Time.match(/(\d{1,2}):(\d{2})/);
+          if (m) return m[1].padStart(2, '0') + ':' + m[2];
+        }
+        if (spot.recorded_at) {
+          var d = new Date(spot.recorded_at * 1000);
+          if (!isNaN(d.getTime())) {
+            return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+          }
+        }
+        return '--:--';
+      }
+      function apply(spot) {
+        root.hidden = false;
+        root.classList.toggle('is-stale', !!spot.stale);
+        var speed = Math.round(Number(spot.Speed) || 0);
+        var gust = Math.round(Number(spot.Gust) || 0);
+        var angle = Number(spot.Angle);
+        if (!isFinite(angle)) angle = 0;
+        var card = cardinal(angle);
+        var t = formatTime(spot);
+        speedEl.textContent = String(speed);
+        gustEl.textContent = String(gust);
+        dirEl.textContent = card + ' · ' + Math.round(angle) + '°';
+        timeEl.textContent = t;
+        var deg = ((angle + 180) % 360 + 360) % 360;
+        needleEl.setAttribute('transform', 'rotate(' + deg + ' 24 24)');
+      }
+      function renderHistory(readings) {
+        if (!historyList) return;
+        if (!readings || !readings.length) {
+          historyList.innerHTML = '<div class="cam-history-empty">—</div>';
+          return;
+        }
+        var html = '';
+        for (var i = 0; i < readings.length; i++) {
+          var rd = readings[i];
+          var wind = Math.round(Number(rd.wind) || 0);
+          var gust = Math.round(Number(rd.gust) || 0);
+          var dir = Number(rd.wind_dir);
+          if (!isFinite(dir)) dir = 0;
+          var arrowDeg = ((dir + 180) % 360 + 360) % 360;
+          var css = rd.css ? String(rd.css) : '';
+          html += '<div class="cam-history-row ' + css + '">' +
+            '<div class="cam-history-time">' + (rd.time || '--:--') + '</div>' +
+            '<div class="cam-history-speed">' +
+              arrowHTML.replace('ANGLE', String(arrowDeg)) +
+              wind + '-' + gust +
+            '</div></div>';
+        }
+        var keepTop = historyList.scrollTop < 8;
+        historyList.innerHTML = html;
+        if (keepTop) historyList.scrollTop = 0;
+      }
+      function pollHistory(force) {
+        if (!historyList || historyBusy) return;
+        historyBusy = true;
+        var url = '/api/wind/recent?location=kh&limit=160';
+        if (!force && latestHistoryPeriod) {
+          url += '&since=' + encodeURIComponent(latestHistoryPeriod);
+        }
+        fetch(url, { cache: 'no-store' })
+          .then(function (r) {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.json();
+          })
+          .then(function (data) {
+            if (!data || !data.ok) return;
+            if (data.latestPeriod) latestHistoryPeriod = data.latestPeriod;
+            if (data.changed === false) return;
+            renderHistory(data.readings || []);
+          })
+          .catch(function () {})
+          .finally(function () { historyBusy = false; });
+      }
+      function poll() {
+        fetch('/api/windometer/live', { cache: 'no-store' })
+          .then(function (r) {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.json();
+          })
+          .then(function (data) {
+            if (!data || !data.ok || !data.results || !data.results[slug]) return;
+            apply(data.results[slug]);
+            // Live proxy may have just persisted a new KH sample — refresh history immediately.
+            pollHistory(false);
+          })
+          .catch(function () {});
+      }
+      poll();
+      pollHistory(true);
+      setInterval(poll, 10000);
+      setInterval(function () { pollHistory(false); }, 3000);
+    })();
+  </script>
 </body>
 </html>

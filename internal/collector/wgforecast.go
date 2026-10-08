@@ -16,10 +16,11 @@ type WGForecastService struct {
 	Store  *store.Store
 	WG     *windguru.ForecastClient
 	Log    *slog.Logger
+	Notify *ForecastGustNotifyService
 }
 
 type WGForecastOptions struct {
-	Force bool // skip 7am window and re-fetch even if already stored today
+	Force bool // skip 7am window
 }
 
 func (s *WGForecastService) Run(now time.Time, opts WGForecastOptions) error {
@@ -42,34 +43,34 @@ func (s *WGForecastService) Run(now time.Time, opts WGForecastOptions) error {
 		return nil
 	}
 
-	forecastDate := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, s.Cfg.Timezone)
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, s.Cfg.Timezone)
 	fetchedAt := now
 
 	for _, sp := range spots {
 		if sp.WindguruID == nil {
 			continue
 		}
-		if !opts.Force {
-			exists, err := s.Store.WindForecastAlreadyFetched(*sp.WindguruID, forecastDate)
-			if err != nil {
-				return err
-			}
-			if exists {
-				s.Log.Info("wg forecast skipped", "spot", sp.ID, "windguru_id", *sp.WindguruID, "reason", "already fetched today")
-				continue
-			}
-		}
 
-		rows, err := s.WG.FetchSpotForecasts(*sp.WindguruID, forecastDate, s.Cfg.Timezone)
+		rows, err := s.WG.FetchSpotForecasts(*sp.WindguruID, today, s.Cfg.Timezone)
 		if err != nil {
 			return fmt.Errorf("spot %s windguru %d: %w", sp.ID, *sp.WindguruID, err)
+		}
+		if h := sp.WindguruHiresID; h != nil && *h != *sp.WindguruID {
+			hires, err := s.WG.FetchSpotForecastsMicro(*h, today, s.Cfg.Timezone)
+			if err != nil {
+				// The spot's own models are still worth saving.
+				s.Log.Warn("wg hires forecast", "spot", sp.ID, "hires_id", *h, "err", err)
+			} else {
+				var added int
+				rows, added = mergeMissingModels(rows, hires)
+				s.Log.Info("wg hires models added", "spot", sp.ID, "hires_id", *h, "models", added)
+			}
 		}
 		for i := range rows {
 			rows[i].Location = sp.ID
 			rows[i].WindguruID = *sp.WindguruID
-			rows[i].ForecastDate = forecastDate
 		}
-		if err := s.Store.ReplaceWindForecast(*sp.WindguruID, forecastDate, fetchedAt, rows); err != nil {
+		if err := s.Store.ReplaceAllWindForecast(*sp.WindguruID, today, fetchedAt, rows); err != nil {
 			return err
 		}
 		s.Log.Info("wg forecast saved",
@@ -77,15 +78,49 @@ func (s *WGForecastService) Run(now time.Time, opts WGForecastOptions) error {
 			"windguru_id", *sp.WindguruID,
 			"rows", len(rows),
 			"models", countModels(rows),
+			"days", countDays(rows),
 		)
 	}
+
+	if s.Notify != nil {
+		if err := s.Notify.Run(now); err != nil {
+			s.Log.Error("forecast gust notify", "err", err)
+		}
+	}
 	return nil
+}
+
+// mergeMissingModels appends the models in extra that rows does not already
+// have, so a spot keeps its own series for every model it has and only borrows
+// the ones its Windguru spot withholds.
+func mergeMissingModels(rows, extra []models.WindForecastRow) ([]models.WindForecastRow, int) {
+	have := map[int]bool{}
+	for _, r := range rows {
+		have[r.IDModel] = true
+	}
+	added := map[int]bool{}
+	for _, r := range extra {
+		if have[r.IDModel] {
+			continue
+		}
+		added[r.IDModel] = true
+		rows = append(rows, r)
+	}
+	return rows, len(added)
 }
 
 func countModels(rows []models.WindForecastRow) int {
 	seen := map[int]bool{}
 	for _, r := range rows {
 		seen[r.IDModel] = true
+	}
+	return len(seen)
+}
+
+func countDays(rows []models.WindForecastRow) int {
+	seen := map[string]bool{}
+	for _, r := range rows {
+		seen[r.ForecastDate.Format("2006-01-02")] = true
 	}
 	return len(seen)
 }
