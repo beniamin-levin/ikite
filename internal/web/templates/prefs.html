@@ -692,10 +692,24 @@
       document.getElementById('notif-rules').addEventListener('change', function (e) {
         var block = e.target.closest('.notif-rule');
         if (!block) return;
-        if (e.target.classList.contains('notif-enabled') && e.target.value === '1') {
-          ensureNotificationPermission().then(function () {
-            updatePermissionStatus();
-          });
+        if (e.target.classList.contains('notif-enabled')) {
+          // On/Off takes effect at once: the alert check in every open ikite tab
+          // reads the saved prefs, so an Off left unsaved kept alerts coming.
+          var statusEl = document.getElementById('notif-status');
+          var saveNow = function () {
+            var prefs = readForm(mergePrefs(collectSpots));
+            prefs.prefsVersion = IkitePrefs.PREFS_VERSION;
+            IkitePrefs.savePrefs(prefs);
+            setStatus(statusEl, t('common.saved'), true);
+          };
+          if (e.target.value === '1') {
+            ensureNotificationPermission().then(function () {
+              updatePermissionStatus();
+              saveNow();
+            });
+          } else {
+            saveNow();
+          }
         }
         if (e.target.classList.contains('notif-center')) {
           var label = block.querySelector('.notif-label');
