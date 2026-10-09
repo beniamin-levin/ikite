@@ -9,6 +9,8 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	"github.com/ben/ikite-go/internal/store"
 )
 
 // flashPNG paints a flash (3×3 px) at a lat/lon on the lightning window.
@@ -142,5 +144,37 @@ func TestParseIMSWarningsEmpty(t *testing.T) {
 	items, err := ParseIMSWarnings([]byte(`{"data":{"full_warnings_data":[],"distinct_warnings":[]},"method":"GET"}`), tz)
 	if err != nil || len(items) != 0 {
 		t.Fatalf("empty warnings: %v, %d items", err, len(items))
+	}
+}
+
+// IMS re-issues a warning under a new id when it rewords it: only the first of
+// each kind/severity/window is sent; a changed window or severity is news.
+func TestSplitIMSRepeats(t *testing.T) {
+	tz := time.FixedZone("IL", 3*3600)
+	at := func(d, h int) time.Time { return time.Date(2026, 10, d, h, 0, 0, 0, tz) }
+	sent := at(8, 19)
+	w := func(wid int64, sev, fromD, fromH, toD, toH int, s *time.Time) store.IMSWarning {
+		return store.IMSWarning{WID: wid, TypeID: 3, SeverityID: sev, ValidFrom: at(fromD, fromH), ValidTo: at(toD, toH), SentAt: s}
+	}
+	ws := []store.IMSWarning{
+		w(1, 3, 8, 10, 8, 22, &sent), // already sent
+		w(2, 3, 8, 10, 8, 22, nil),   // reworded repeat of 1
+		w(3, 3, 8, 22, 9, 10, nil),   // new window: send
+		w(4, 3, 8, 22, 9, 10, nil),   // repeat of 3
+		w(5, 3, 8, 22, 9, 10, nil),   // repeat of 3
+		w(6, 4, 8, 22, 9, 10, nil),   // upgraded to orange: send
+	}
+	send, rep := splitIMSRepeats(ws)
+	ids := func(xs []store.IMSWarning) (out []int64) {
+		for _, x := range xs {
+			out = append(out, x.WID)
+		}
+		return
+	}
+	if got := ids(send); len(got) != 2 || got[0] != 3 || got[1] != 6 {
+		t.Fatalf("send %v, want [3 6]", got)
+	}
+	if got := ids(rep); len(got) != 3 || got[0] != 2 || got[1] != 4 || got[2] != 5 {
+		t.Fatalf("repeats %v, want [2 4 5]", got)
 	}
 }

@@ -844,6 +844,40 @@ const imsWarnCheckedKey = "squall_ims_warn_checked"
 
 // imsWarningStep checks IMS warnings every 10 minutes and sends each new one
 // covering Haifa Bay once, during alert hours.
+
+// imsWarningKey is what makes a warning news: its kind, severity and valid
+// window. IMS re-issues the same warning under a new id whenever it rewords
+// it (5 times for one sea warning on 2026-10-08, and 3 queued overnight that
+// all went out at 06:00 on 10-09); those are repeats, not new warnings.
+func imsWarningKey(w store.IMSWarning) string {
+	return fmt.Sprintf("%d|%d|%s|%s", w.TypeID, w.SeverityID,
+		w.ValidFrom.Format("2006-01-02 15:04"), w.ValidTo.Format("2006-01-02 15:04"))
+}
+
+// splitIMSRepeats splits the unsent warnings into the ones to send (the first
+// of each key not already sent) and repeats of a warning already sent or
+// already picked.
+func splitIMSRepeats(ws []store.IMSWarning) (send, repeats []store.IMSWarning) {
+	seen := map[string]bool{}
+	for _, w := range ws {
+		if w.SentAt != nil {
+			seen[imsWarningKey(w)] = true
+		}
+	}
+	for _, w := range ws {
+		if w.SentAt != nil {
+			continue
+		}
+		k := imsWarningKey(w)
+		if seen[k] {
+			repeats = append(repeats, w)
+			continue
+		}
+		seen[k] = true
+		send = append(send, w)
+	}
+	return send, repeats
+}
 func (s *Service) imsWarningStep(now time.Time) error {
 	checked, _ := s.Store.GetSetting(imsWarnCheckedKey)
 	if t, err := time.ParseInLocation("2006-01-02 15:04", checked, s.TZ); err != nil || now.Sub(t) >= 10*time.Minute {
@@ -876,10 +910,16 @@ func (s *Service) imsWarningStep(now time.Time) error {
 	if err != nil {
 		return err
 	}
-	for _, w := range ws {
-		if w.SentAt != nil {
-			continue
+	send, repeats := splitIMSRepeats(ws)
+	for _, w := range repeats {
+		// Same warning IMS re-issued under a new id (reworded): record it as
+		// handled without messaging again.
+		s.Log.Info("ims warning repeat skipped", "wid", w.WID, "type", w.TypeID)
+		if err := s.Store.MarkIMSWarningSent(w.WID, now); err != nil {
+			return err
 		}
+	}
+	for _, w := range send {
 		it := IMSWarningItem{WID: w.WID, TypeID: w.TypeID, SeverityID: w.SeverityID, ValidFrom: w.ValidFrom,
 			ValidTo: w.ValidTo, TextEN: w.TextEN, TextHE: w.TextHE}
 		details := ""
