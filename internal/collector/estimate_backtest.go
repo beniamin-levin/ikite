@@ -61,8 +61,9 @@ func (b backtestScore) String() string {
 
 // Backtest replays the last `days` days (today included) for every spot, each
 // day calibrated only on the days before it, exactly as the daily run would
-// have, and scores the time-of-day calibration against the time-of-day plus
-// direction one. Nothing is written.
+// have, and scores calibration setups against each other. Every setup is
+// scored on the same hours with the forecasts ikite really had that day; the
+// setups differ only in what they calibrate on. Nothing is written.
 func (s *EstimateService) Backtest(w io.Writer, now time.Time, days int) error {
 	now = now.In(s.Cfg.Timezone)
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, s.Cfg.Timezone)
@@ -70,16 +71,24 @@ func (s *EstimateService) Backtest(w io.Writer, now time.Time, days int) error {
 	if err != nil {
 		return fmt.Errorf("collect spots: %w", err)
 	}
+	dir := estimate.DefaultOptions
 	methods := []struct {
-		name string
-		opt  estimate.Options
+		name  string
+		setup estimateSetup
 	}{
-		{"time of day      ", estimate.Options{ByDirection: false}},
-		{"time + direction ", estimate.Options{ByDirection: true}},
+		{"saved, 60 d, no direction", estimateSetup{60, false, estimate.Options{}}},
+		{"saved, 60 d              ", estimateSetup{60, false, dir}},
+		{"+ archive, 60 d          ", estimateSetup{60, true, dir}},
+		{"+ archive, 1 year        ", estimateSetup{365, true, dir}},
+		{"+ archive, 3 years       ", estimateSetup{1100, true, dir}},
+	}
+	maxDays := 0
+	for _, m := range methods {
+		maxDays = max(maxDays, m.setup.historyDays)
 	}
 	totals := make([]backtestScore, len(methods))
 	for _, sp := range spots {
-		histFrom := today.AddDate(0, 0, -(estimateHistoryDays + days))
+		histFrom := today.AddDate(0, 0, -(maxDays + days))
 		end := today.AddDate(0, 0, 1)
 		obs, err := s.Store.HourlyObserved(sp.ID, histFrom, end, estimateFromHour, estimateToHour)
 		if err != nil {
@@ -89,16 +98,29 @@ func (s *EstimateService) Backtest(w io.Writer, now time.Time, days int) error {
 		if err != nil {
 			return fmt.Errorf("%s forecasts: %w", sp.ID, err)
 		}
-		history := pairHistory(obs, groupForecasts(past))
+		arch, err := s.Store.ListForecastArchive(sp.ID, histFrom, end)
+		if err != nil {
+			return fmt.Errorf("%s archive: %w", sp.ID, err)
+		}
+		saved := groupForecasts(past)
+		history := pairHistory(obs, saved)
 		if len(history) == 0 {
 			continue
+		}
+		withArch := history
+		if len(arch) > 0 {
+			withArch = pairHistory(obs, withArchive(saved, arch))
 		}
 		scores := make([]backtestScore, len(methods))
 		for d := days - 1; d >= 0; d-- {
 			day := today.AddDate(0, 0, -d)
 			dayS := day.Format("2006-01-02")
 			for i, m := range methods {
-				cal := fitBeforeWith(history, day, m.opt)
+				train := history
+				if m.setup.archive {
+					train = withArch
+				}
+				cal := fitBeforeWith(train, day, m.setup)
 				if !cal.Usable() {
 					continue
 				}
@@ -112,10 +134,10 @@ func (s *EstimateService) Backtest(w io.Writer, now time.Time, days int) error {
 				}
 			}
 		}
-		if scores[0].n == 0 {
+		if scores[1].n == 0 {
 			continue
 		}
-		fmt.Fprintf(w, "%s (%s)\n", sp.Name, sp.ID)
+		fmt.Fprintf(w, "%s (%s), archive hours %d\n", sp.Name, sp.ID, len(arch))
 		for i, m := range methods {
 			fmt.Fprintf(w, "  %s %s\n", m.name, scores[i])
 			totals[i].merge(scores[i])

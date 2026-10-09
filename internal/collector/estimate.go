@@ -21,6 +21,17 @@ const (
 	estimateToHour   = 21
 )
 
+// estimateSetup is how much history calibrates the estimate and whether the
+// Windguru archive (wind_forecast_archive) fills hours ikite saved no forecast for.
+type estimateSetup struct {
+	historyDays int
+	archive     bool
+	opt         estimate.Options
+}
+
+// defaultSetup is what the daily run uses.
+var defaultSetup = estimateSetup{historyDays: estimateHistoryDays, archive: false, opt: estimate.DefaultOptions}
+
 // EstimateService writes ikite's blended best-estimate wind for every spot that
 // has both a meter and enough model history to calibrate against. It runs after
 // each forecast source lands (07:30 and 09:30), so the estimate always reflects
@@ -67,7 +78,8 @@ func (s *EstimateService) Run(now time.Time, backfillDays int) error {
 
 // runSpot returns the number of hours estimated for today-and-forward.
 func (s *EstimateService) runSpot(spot string, today, now time.Time, backfillDays int) (int, error) {
-	histFrom := today.AddDate(0, 0, -(estimateHistoryDays + backfillDays))
+	setup := defaultSetup
+	histFrom := today.AddDate(0, 0, -(setup.historyDays + backfillDays))
 
 	obs, err := s.Store.HourlyObserved(spot, histFrom, today, estimateFromHour, estimateToHour)
 	if err != nil {
@@ -87,18 +99,26 @@ func (s *EstimateService) runSpot(spot string, today, now time.Time, backfillDay
 	}
 
 	pastByHour := groupForecasts(past)
-	history := pairHistory(obs, pastByHour)
+	calHours := pastByHour
+	if setup.archive {
+		arch, err := s.Store.ListForecastArchive(spot, histFrom, today)
+		if err != nil {
+			return 0, fmt.Errorf("archive: %w", err)
+		}
+		calHours = withArchive(pastByHour, arch)
+	}
+	history := pairHistory(obs, calHours)
 
 	// Replay earlier days first, oldest to newest.
 	for d := backfillDays; d >= 1; d-- {
 		day := today.AddDate(0, 0, -d)
-		pts := estimateHours(fitBefore(history, day), pastByHour, day, day.AddDate(0, 0, 1), now)
+		pts := estimateHours(fitBeforeWith(history, day, setup), pastByHour, day, day.AddDate(0, 0, 1), now)
 		if err := s.Store.ReplaceWindEstimate(spot, day, day.AddDate(0, 0, 1), pts); err != nil {
 			return 0, fmt.Errorf("backfill %s: %w", day.Format("2006-01-02"), err)
 		}
 	}
 
-	cal := fitBefore(history, today)
+	cal := fitBeforeWith(history, today, setup)
 	if !cal.Usable() {
 		s.Log.Info("estimate skipped", "spot", spot, "reason", "fewer than two models with enough history",
 			"models", len(cal.Models))
@@ -158,9 +178,35 @@ type datedPast struct {
 	past estimate.Past
 }
 
+// deadMeterDays finds days the meter reported (near) zero all day: a dead
+// sensor, not calm. KH's meter sent only zeros for most of 2025; calibrating on
+// those hours taught the estimate that KH blows 5–9 kt less than it does.
+func deadMeterDays(obs []models.ObservedHour) map[string]bool {
+	peak := map[string]float64{}
+	hours := map[string]int{}
+	for _, o := range obs {
+		d := o.Hour.Format("2006-01-02")
+		hours[d]++
+		if o.Wind > peak[d] {
+			peak[d] = o.Wind
+		}
+	}
+	dead := map[string]bool{}
+	for d, n := range hours {
+		if n >= 6 && peak[d] < 0.5 {
+			dead[d] = true
+		}
+	}
+	return dead
+}
+
 func pairHistory(obs []models.ObservedHour, fc map[string]*hourForecasts) []datedPast {
 	var out []datedPast
+	dead := deadMeterDays(obs)
 	for _, o := range obs {
+		if dead[o.Hour.Format("2006-01-02")] {
+			continue
+		}
 		h, ok := fc[wallHour(o.Hour)]
 		if !ok {
 			continue
@@ -175,12 +221,8 @@ func pairHistory(obs []models.ObservedHour, fc map[string]*hourForecasts) []date
 
 // fitBefore calibrates on the estimateHistoryDays before day — never on day
 // itself or later, so no estimate is fitted on what it is trying to predict.
-func fitBefore(history []datedPast, day time.Time) estimate.Calibration {
-	return fitBeforeWith(history, day, estimate.DefaultOptions)
-}
-
-func fitBeforeWith(history []datedPast, day time.Time, opt estimate.Options) estimate.Calibration {
-	from := day.AddDate(0, 0, -estimateHistoryDays).Format("2006-01-02")
+func fitBeforeWith(history []datedPast, day time.Time, setup estimateSetup) estimate.Calibration {
+	from := day.AddDate(0, 0, -setup.historyDays).Format("2006-01-02")
 	to := day.Format("2006-01-02")
 	var train []estimate.Past
 	for _, h := range history {
@@ -188,7 +230,33 @@ func fitBeforeWith(history []datedPast, day time.Time, opt estimate.Options) est
 			train = append(train, h.past)
 		}
 	}
-	return estimate.FitWith(train, opt)
+	return estimate.FitWith(train, setup.opt)
+}
+
+// withArchive adds archived forecasts to the hours ikite saved, for models
+// missing at that hour; a forecast ikite saved itself always wins.
+func withArchive(saved map[string]*hourForecasts, arch []models.WindForecastRow) map[string]*hourForecasts {
+	out := make(map[string]*hourForecasts, len(saved))
+	for k, h := range saved {
+		out[k] = &hourForecasts{period: h.period, forecasts: append([]estimate.Forecast(nil), h.forecasts...)}
+	}
+	for k, a := range groupForecasts(arch) {
+		h := out[k]
+		if h == nil {
+			out[k] = a
+			continue
+		}
+		have := map[string]bool{}
+		for _, f := range h.forecasts {
+			have[f.Model] = true
+		}
+		for _, f := range a.forecasts {
+			if !have[f.Model] {
+				h.forecasts = append(h.forecasts, f)
+			}
+		}
+	}
+	return out
 }
 
 // estimateHours estimates every grouped hour whose day is in [from, to); a zero
