@@ -34,10 +34,12 @@ func TestIsraelSpotIDs(t *testing.T) {
 		{ID: "1091", Name: "Paros"},
 		{ID: "bg", Name: "Bat Galim"},
 		{ID: "4257", Name: "Zandvoort"},
+		{ID: "5730", Name: "Merom"},
+		{ID: "5732", Name: "Avney Eitan"},
 	}
 	got := israelSpotIDs(spots)
 	if len(got) != 2 || got[0] != "ky" || got[1] != "bg" {
-		t.Fatalf("got %v, want only the 2 Israel spots (ky, bg)", got)
+		t.Fatalf("got %v, want only ky and bg", got)
 	}
 }
 
