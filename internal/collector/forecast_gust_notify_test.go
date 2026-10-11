@@ -35,6 +35,7 @@ func TestIsraelSpotIDs(t *testing.T) {
 		{ID: "bg", Name: "Bat Galim"},
 		{ID: "4257", Name: "Zandvoort"},
 		{ID: "5730", Name: "Merom"},
+		{ID: "5731", Name: "Zemach"},
 		{ID: "5732", Name: "Avney Eitan"},
 	}
 	got := israelSpotIDs(spots)

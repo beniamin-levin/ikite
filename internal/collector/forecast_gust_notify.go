@@ -28,7 +28,7 @@ const (
 )
 
 // internationalSpotIDs are spots excluded from forecast gust alerts: the ones
-// abroad, plus Merom and Avney Eitan (Golan / Sea of Galilee heights), which
+// abroad, plus Merom, Zemach and Avney Eitan (Golan / Sea of Galilee), which
 // Ben does not want alerts for.
 var internationalSpotIDs = map[string]bool{
 	"1091":  true, // Paros
@@ -38,6 +38,7 @@ var internationalSpotIDs = map[string]bool{
 	"3708":  true, // Los Alcazares
 	"4257":  true, // Zandvoort
 	"5730":  true, // Merom
+	"5731":  true, // Zemach
 	"5732":  true, // Avney Eitan
 }
 
