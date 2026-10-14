@@ -553,6 +553,7 @@ html[data-theme="light"] .prefs-row button.primary {
   --cam-tab-fg: #b8c8d2;
   --cam-card-bg: linear-gradient(180deg, #082236, #061a2a);
   --cam-live: #58df76;
+  --cam-down: #ff6b6b;
   --cam-muted: #5f7685;
   --cam-panel: #0a293d;
   --cam-stage: #0b1c28;
@@ -600,6 +601,7 @@ html[data-theme="light"] {
   --cam-tab-fg: #3d5668;
   --cam-card-bg: linear-gradient(180deg, #ffffff, #f4f8fb);
   --cam-live: #1f9d4a;
+  --cam-down: #d33a3a;
   --cam-muted: #5b7386;
   --cam-panel: #eef4f8;
   --cam-stage: #d9e3ec;

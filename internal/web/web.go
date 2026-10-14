@@ -55,6 +55,9 @@ type Server struct {
 	accMu    sync.Mutex
 	accCache map[string]accuracyEntry
 	accSF    singleflight.Group
+
+	camStatus camStatusCache
+	camProbe  func(ctx context.Context, f camFeed) camProbe // nil: probeCamera
 }
 
 func New(cfg *config.Config, st *store.Store, log *slog.Logger) (*Server, error) {
@@ -1124,67 +1127,134 @@ func (s *Server) settingsSpotRows() ([]map[string]any, error) {
 	return rows, nil
 }
 
+// ipcamPlayer is the embed for an ipcamlive alias.
+func ipcamPlayer(alias string, autoplay bool) string {
+	u := "https://ipcamlive.com/player/player.php?alias=" + alias
+	if autoplay {
+		u += "&autoplay=1"
+	} else {
+		u += "&autoplay=0"
+	}
+	u += "&skin=white&hidelink=true&disablereportbutton=true&disableautofullscreen=1&disablezoombutton=1&disableframecapture=1"
+	if autoplay {
+		u += "&disableuserpause=1"
+	}
+	return u
+}
+
+func ipcamFeed(alias string) []camFeed {
+	return []camFeed{{IPCam: alias, Embed: ipcamPlayer(alias, false)}}
+}
+
+// surfCycleChannel is Surf Cycle's YouTube channel, the Kiryat Yam cameras
+// surfo.co.il shows on its weather page.
+const surfCycleChannel = "UCJB82Q8aRp7iXlVnV-0GhPw"
+
+// cameraCatalog lists the cameras in picker order. Each is checked before it
+// is shown: a feed that is down, or would replay an ended broadcast, is not
+// embedded (see cameraStatus).
+var cameraCatalog = []struct {
+	Key, Msg string
+	Feeds    []camFeed
+}{
+	// The second KH feed (YouTube Lemon5) is dropped: it kept serving a frozen
+	// frame. Add it back as a second feed when it is live again.
+	{"kh", "camera.kh", []camFeed{{IPCam: "6469b4554f45e", Embed: ipcamPlayer("6469b4554f45e", true)}}},
+	{"ky", "camera.ky", []camFeed{
+		{YouTube: "9lbGbvFREx0", Channel: surfCycleChannel, Embed: youtubeEmbedURL("9lbGbvFREx0"), Label: "camera.ky_nw"},
+		{YouTube: "xwJTEInXEeE", Channel: surfCycleChannel, Embed: youtubeEmbedURL("xwJTEInXEeE"), Label: "camera.ky_sw"},
+	}},
+	{"bg", "camera.bg", ipcamFeed("60997a5d22ca9")},
+	{"nirvana", "camera.nirvana", ipcamFeed("60acaa1aeee83")},
+	{"mm", "camera.mm", ipcamFeed("5b17c8292282c")},
+	{"nahariya", "camera.nahariya", ipcamFeed("65f00165e60f4")},
+	{"zvulun", "camera.zvulun", ipcamFeed("634548590c353")},
+	{"hilton", "camera.hilton", ipcamFeed("63454584c4c3c")},
+	{"kineret", "camera.kineret", ipcamFeed("61a4836d911ac")},
+}
+
+func allCameraFeeds() []camFeed {
+	var out []camFeed
+	for _, c := range cameraCatalog {
+		out = append(out, c.Feeds...)
+	}
+	return out
+}
+
+// cameraView is what a camera shows after its feeds are checked: the feeds to
+// embed and the camera's state, which is live when a shown feed is live.
+type cameraView struct {
+	State  camState
+	Embeds []string
+	Labels []string
+	Site   string
+}
+
+func viewCamera(feeds []camFeed, probes map[string]camProbe) cameraView {
+	v := cameraView{State: camOffline}
+	blocked := 0
+	seen := map[string]bool{}
+	for _, f := range feeds {
+		p := probes[f.key()]
+		switch p.State {
+		case camBlocked:
+			blocked++
+			if v.Site == "" {
+				v.Site = p.Site
+			}
+			continue
+		case camOffline:
+			continue
+		}
+		embed, label := f.Embed, f.Label
+		if p.Embed != "" && p.Embed != f.Embed {
+			// The channel's current broadcast: which view it is is unknown.
+			embed, label = p.Embed, ""
+		}
+		if seen[embed] {
+			continue
+		}
+		seen[embed] = true
+		v.Embeds = append(v.Embeds, embed)
+		v.Labels = append(v.Labels, label)
+		if p.State == camLive {
+			v.State = camLive
+		} else if v.State != camLive {
+			v.State = camUnknown
+		}
+	}
+	if len(v.Embeds) == 0 && blocked == len(feeds) {
+		v.State = camBlocked
+	}
+	return v
+}
+
 func (s *Server) handleCamera(w http.ResponseWriter, r *http.Request) {
 	type camOpt struct {
 		Key    string
 		Name   string
 		Active bool
-		Live   bool
+		State  string
 	}
 	type camCard struct {
 		Key        string
 		Name       string
 		Embed      string
 		EmbedLabel string // shown above the first feed when a card carries two
-		YouTube    bool
 		ExtraEmbed string // optional second feed (e.g. the KY south-west view)
 		ExtraLabel string
-		Live       bool
+		State      string
+		Site       string // the owner's page, for a camera that cannot be embedded
 		HasWind    bool
 	}
 	tr := i18n.FromRequest(r)
-	catalog := []struct {
-		Key, Msg, Embed string
-		YouTube, Live   bool
-		ExtraEmbed      string
-		ExtraMsg        string
-		EmbedMsg        string
-	}{
-		{
-			Key: "kh", Msg: "camera.kh",
-			Embed:   "https://ipcamlive.com/player/player.php?alias=6469b4554f45e&autoplay=1&skin=white&hidelink=true&disablereportbutton=true&disableautofullscreen=1&disablezoombutton=1&disableframecapture=1&disableuserpause=1",
-			YouTube: false,
-			Live:    true,
-			// The second KH feed (YouTube Lemon5) is dropped: it kept serving a
-			// frozen frame. Restore ExtraEmbed/ExtraMsg here when it is live again.
-		},
-		{
-			Key: "ky", Msg: "camera.ky",
-			// Both feeds are Surf Cycle's Kiryat Yam cameras, the pair surfo.co.il
-			// shows on its weather page. Muted autoplay is a YouTube requirement:
-			// an unmuted embed is blocked from starting on its own.
-			Embed:      "https://www.youtube.com/embed/9lbGbvFREx0?autoplay=1&mute=1",
-			EmbedMsg:   "camera.ky_nw",
-			ExtraEmbed: "https://www.youtube.com/embed/xwJTEInXEeE?autoplay=1&mute=1",
-			ExtraMsg:   "camera.ky_sw",
-			YouTube:    true,
-			Live:       true,
-			// Previously a single feed, EfU0pofsmew, from the same channel.
-		},
-		{"bg", "camera.bg", "https://ipcamlive.com/player/player.php?alias=60997a5d22ca9&autoplay=0&skin=white&hidelink=true&disablereportbutton=true&disableautofullscreen=1&disablezoombutton=1&disableframecapture=1", false, true, "", "", ""},
-		{"nirvana", "camera.nirvana", "https://ipcamlive.com/player/player.php?alias=60acaa1aeee83&autoplay=0&skin=white&hidelink=true&disablereportbutton=true&disableautofullscreen=1&disablezoombutton=1&disableframecapture=1", false, false, "", "", ""},
-		{"mm", "camera.mm", "https://ipcamlive.com/player/player.php?alias=5b17c8292282c&autoplay=0&skin=white&hidelink=true&disablereportbutton=true&disableautofullscreen=1&disablezoombutton=1&disableframecapture=1", false, true, "", "", ""},
-		{"nahariya", "camera.nahariya", "https://ipcamlive.com/player/player.php?alias=65f00165e60f4&autoplay=0&skin=white&hidelink=true&disablereportbutton=true&disableautofullscreen=1&disablezoombutton=1&disableframecapture=1", false, true, "", "", ""},
-		{"zvulun", "camera.zvulun", "https://ipcamlive.com/player/player.php?alias=634548590c353&autoplay=0&skin=white&hidelink=true&disablereportbutton=true&disableautofullscreen=1&disablezoombutton=1&disableframecapture=1", false, true, "", "", ""},
-		{"hilton", "camera.hilton", "https://ipcamlive.com/player/player.php?alias=63454584c4c3c&autoplay=0&skin=white&hidelink=true&disablereportbutton=true&disableautofullscreen=1&disablezoombutton=1&disableframecapture=1", false, true, "", "", ""},
-		{"kineret", "camera.kineret", "https://ipcamlive.com/player/player.php?alias=61a4836d911ac&autoplay=0&skin=white&hidelink=true&disablereportbutton=true&disableautofullscreen=1&disablezoombutton=1&disableframecapture=1", false, true, "", "", ""},
-	}
+	probes := s.cameraStatus(allCameraFeeds())
 	selected := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("cam")))
 	if selected == "" {
 		selected = "kh"
 	}
 	valid := selected == "all"
-	for _, c := range catalog {
+	for _, c := range cameraCatalog {
 		if c.Key == selected {
 			valid = true
 			break
@@ -1194,10 +1264,11 @@ func (s *Server) handleCamera(w http.ResponseWriter, r *http.Request) {
 		selected = "kh"
 	}
 
-	options := []camOpt{{Key: "all", Name: tr.T("camera.all"), Active: selected == "all", Live: false}}
-	for _, c := range catalog {
+	options := []camOpt{{Key: "all", Name: tr.T("camera.all"), Active: selected == "all"}}
+	for _, c := range cameraCatalog {
 		options = append(options, camOpt{
-			Key: c.Key, Name: tr.T(c.Msg), Active: c.Key == selected, Live: c.Live,
+			Key: c.Key, Name: tr.T(c.Msg), Active: c.Key == selected,
+			State: viewCamera(c.Feeds, probes).State.String(),
 		})
 	}
 
@@ -1206,20 +1277,26 @@ func (s *Server) handleCamera(w http.ResponseWriter, r *http.Request) {
 		featuredKey = "kh"
 	}
 	var featured camCard
-	for _, c := range catalog {
+	for _, c := range cameraCatalog {
 		if c.Key != featuredKey {
 			continue
 		}
+		v := viewCamera(c.Feeds, probes)
 		featured = camCard{
-			Key: c.Key, Name: tr.T(c.Msg), Embed: c.Embed,
-			YouTube: c.YouTube, Live: c.Live, HasWind: c.Key == "kh",
-			ExtraEmbed: c.ExtraEmbed,
+			Key: c.Key, Name: tr.T(c.Msg), State: v.State.String(), Site: v.Site,
+			HasWind: c.Key == "kh",
 		}
-		if c.EmbedMsg != "" {
-			featured.EmbedLabel = tr.T(c.EmbedMsg)
+		if len(v.Embeds) > 0 {
+			featured.Embed = v.Embeds[0]
 		}
-		if c.ExtraMsg != "" {
-			featured.ExtraLabel = tr.T(c.ExtraMsg)
+		if len(v.Embeds) > 1 {
+			featured.ExtraEmbed = v.Embeds[1]
+			if v.Labels[0] != "" {
+				featured.EmbedLabel = tr.T(v.Labels[0])
+			}
+			if v.Labels[1] != "" {
+				featured.ExtraLabel = tr.T(v.Labels[1])
+			}
 		}
 		break
 	}

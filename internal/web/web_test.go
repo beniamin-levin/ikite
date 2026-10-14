@@ -238,6 +238,7 @@ func TestCameraDefaultKH(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	s.camProbe = probeAll(camLive)
 	req := httptest.NewRequest(http.MethodGet, "/camera", nil)
 	rr := httptest.NewRecorder()
 	s.Handler().ServeHTTP(rr, req)
@@ -280,6 +281,7 @@ func TestCameraAll(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	s.camProbe = probeAll(camLive)
 	req := httptest.NewRequest(http.MethodGet, "/camera?cam=all", nil)
 	rr := httptest.NewRecorder()
 	s.Handler().ServeHTTP(rr, req)
