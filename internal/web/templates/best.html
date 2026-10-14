@@ -14,7 +14,9 @@
     .best-table th, .best-table td { padding: 4px 5px; text-align: center; white-space: nowrap; }
     .best-table th { color: var(--muted); font-weight: 500; }
     .best-table td.best-spot { text-align: start; font-weight: 600; }
-    .best-table td.best-cell { min-width: 24px; border-radius: 4px; }
+    .best-table td.best-cell { min-width: 34px; border-radius: 4px; line-height: 1.15; padding: 3px 2px; }
+    .best-table td.best-cell b { display: block; font-size: 0.95rem; }
+    .best-table td.best-cell .rng, .best-table td.best-cell .gst { display: block; font-size: 0.68rem; opacity: 0.85; }
     .best-table td.best-cell.kite { outline: 2px solid var(--accent-text); outline-offset: -2px; }
     .best-table td.best-cell.empty { color: var(--muted); }
     .best-table tr.dim td.best-spot, .best-table tr.dim td.best-info { color: var(--muted); font-weight: 400; }
@@ -32,7 +34,7 @@
       <h2>{{.Label}}</h2>
       {{if .Kiteable}}
       <p class="best-verdict"><strong>{{.Best.Name}}</strong> <span dir="ltr">{{.Best.Window}}</span>,
-        {{T "best.verdict_wind" .Best.Mean .Best.Peak .Best.Gust}}{{if .Best.Dir}} <span dir="ltr">{{.Best.Dir}}</span>{{end}}
+        {{T "best.verdict_wind" .Best.Mean .Best.Low .Best.High .Best.Gust}}{{if .Best.Dir}} <span dir="ltr">{{.Best.Dir}}</span>{{end}}
         — {{T (printf "best.kite_%d" .Best.KiteBand)}}{{if .Best.Gusty}}, {{T "best.gusty"}}{{end}}</p>
       {{else}}
       <p class="best-verdict none">{{T "best.none" .Best.Name .Best.Peak}}</p>
@@ -50,7 +52,7 @@
             {{range .Rows}}
             <tr{{if not .Kiteable}} class="dim"{{end}}>
               <td class="best-spot">{{.Name}}</td>
-              {{range .Cells}}{{if .Empty}}<td class="best-cell empty">·</td>{{else}}<td class="best-cell {{.CSS}}{{if .Kite}} kite{{end}}">{{.Wind}}</td>{{end}}{{end}}
+              {{range .Cells}}{{if .Empty}}<td class="best-cell empty">·</td>{{else}}<td class="best-cell {{.CSS}}{{if .Kite}} kite{{end}}"><b>{{.Wind}}</b><span class="rng" dir="ltr">{{.Low}}–{{.High}}</span><span class="gst">g{{.Gust}}</span></td>{{end}}{{end}}
               <td class="best-info">{{if .Kiteable}}<span dir="ltr">{{.Window}}</span>{{else}}—{{end}}</td>
             </tr>
             {{end}}

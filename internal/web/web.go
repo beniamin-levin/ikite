@@ -2420,6 +2420,9 @@ func forecastModelTitle(label string) string {
 
 type bestCell struct {
 	Wind  int
+	Low   int
+	High  int
+	Gust  int
 	CSS   string
 	Kite  bool
 	Empty bool
@@ -2429,6 +2432,8 @@ type bestRow struct {
 	Name     string
 	Window   string
 	Mean     int
+	Low      int
+	High     int
 	Peak     int
 	Gust     int
 	Dir      string
@@ -2478,8 +2483,10 @@ func (s *Server) handleBest(w http.ResponseWriter, r *http.Request) {
 				Name:     sd.Group.Name,
 				Window:   sd.Window(),
 				Mean:     int(math.Round(sd.Mean)),
+				Low:      int(math.Round(sd.Low)),
+				High:     int(math.Round(sd.High)),
 				Peak:     int(math.Round(sd.Peak.Wind)),
-				Gust:     int(math.Round(sd.Peak.Gust)),
+				Gust:     int(math.Round(sd.MaxGust)),
 				Dir:      bestweek.Compass(sd.Peak.Dir),
 				KiteBand: bestweek.KiteBand(sd.Mean),
 				Gusty:    sd.Gusty(),
@@ -2497,6 +2504,9 @@ func (s *Server) handleBest(w http.ResponseWriter, r *http.Request) {
 				}
 				row.Cells = append(row.Cells, bestCell{
 					Wind: int(math.Round(eh.Wind)),
+					Low:  int(math.Round(math.Max(0, eh.Low))),
+					High: int(math.Round(eh.High)),
+					Gust: int(math.Round(eh.Gust)),
 					CSS:  models.WindCSSClass(eh.Wind),
 					Kite: eh.Wind >= bestweek.KiteWind,
 				})

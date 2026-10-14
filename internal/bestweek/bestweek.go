@@ -59,7 +59,10 @@ type SpotDay struct {
 	// RunHours is 0 when no hour reaches KiteWind.
 	Start, End, RunHours int
 	Mean                 float64 // mean wind over the run
-	Peak                 Hour    // the windiest hour of the day (of the run, if any)
+	// Low and High are the likely range over the run (of the peak hour
+	// without one); MaxGust the highest gust in it.
+	Low, High, MaxGust float64
+	Peak               Hour // the windiest hour of the day (of the run, if any)
 }
 
 // Gusty reports whether the peak hour's gusts run well above the mean.
@@ -264,6 +267,7 @@ func scoreDay(g Group, hours []Hour) SpotDay {
 			d.Mean = mean(hours[runStart : i+1])
 		}
 	}
+	n := 0
 	for _, h := range hours {
 		if d.RunHours > 0 && (h.Hour < d.Start || h.Hour > d.End) {
 			continue
@@ -271,7 +275,22 @@ func scoreDay(g Group, hours []Hour) SpotDay {
 		if h.Wind > d.Peak.Wind {
 			d.Peak = h
 		}
+		if h.Gust > d.MaxGust {
+			d.MaxGust = h.Gust
+		}
+		if d.RunHours > 0 {
+			d.Low += h.Low
+			d.High += h.High
+			n++
+		}
 	}
+	if n > 0 {
+		d.Low /= float64(n)
+		d.High /= float64(n)
+	} else {
+		d.Low, d.High = d.Peak.Low, d.Peak.High
+	}
+	d.Low = math.Max(0, d.Low)
 	return d
 }
 
