@@ -249,9 +249,9 @@ func TestCameraDefaultKH(t *testing.T) {
 	if !strings.Contains(body, "alias=6469b4554f45e") {
 		t.Fatal("expected Kiryat Haim cam by default")
 	}
-	// The stuck second KH feed was removed; the remaining camera runs full width.
-	if strings.Contains(body, "2Le6SDEO3vc") || strings.Contains(body, `id="extraFrame"`) {
-		t.Fatal("did not expect the removed second KH camera")
+	// Pick Up Surf's YouTube stream is the second KH view.
+	if !strings.Contains(body, "youtube.com/embed/TZyEYU0DIJo") || !strings.Contains(body, `id="extraFrame"`) {
+		t.Fatal("expected the second KH camera")
 	}
 	if strings.Contains(body, `id="camera-stats"`) || strings.Contains(body, `id="stat-wind"`) {
 		t.Fatal("did not expect the bottom wind/gust stats strip")
@@ -261,6 +261,9 @@ func TestCameraDefaultKH(t *testing.T) {
 	}
 	if !strings.Contains(body, `href="/camera?cam=kh" class="active"`) {
 		t.Fatal("expected KH picker active")
+	}
+	if !strings.Contains(body, `href="https://windometer.info/spot/pick-up-surf"`) {
+		t.Fatal("expected a link to the KH wind meter")
 	}
 	if !strings.Contains(body, `id="kh-cam-wind"`) || !strings.Contains(body, `/api/windometer/live`) {
 		t.Fatal("expected KH live wind overlay")

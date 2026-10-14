@@ -57,6 +57,18 @@ func TestParseYouTubeState(t *testing.T) {
 	}
 }
 
+func TestLiveChatRunning(t *testing.T) {
+	if !liveChatRunning([]byte(`{"contents":{"liveChatRenderer":{"continuations":[]}}}`)) {
+		t.Error("a running chat means the broadcast is live")
+	}
+	if liveChatRunning([]byte(`{"contents":{"messageRenderer":{"text":{"runs":[{"text":"Chat is disabled for this live stream."}]}}}}`)) {
+		t.Error("an ended broadcast has no running chat")
+	}
+	if liveChatRunning([]byte(`{"liveChatRenderer":{},"isReplay":true}`)) {
+		t.Error("a chat replay is not live")
+	}
+}
+
 func TestChannelVerdict(t *testing.T) {
 	own := youtubeEmbedURL("9lbGbvFREx0")
 	other := camProbe{State: camLive, Embed: youtubeEmbedURL("NEWLIVEID01")}

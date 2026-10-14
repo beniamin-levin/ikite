@@ -532,7 +532,7 @@
           {{else}}
           <p>{{T "camera.meta_unknown"}}</p>
           {{end}}
-          {{if .Featured.Source}}<p class="camera-source">{{T "camera.source"}} <a href="{{.Featured.Source}}" target="_blank" rel="noopener">{{.Featured.SourceHost}}</a></p>{{end}}
+          {{if .Featured.Source}}<p class="camera-source">{{T "camera.source"}} <a href="{{.Featured.Source}}" target="_blank" rel="noopener">{{.Featured.SourceHost}}</a>{{if .Featured.WindSource}} · {{T "camera.wind_source"}} <a href="{{.Featured.WindSource}}" target="_blank" rel="noopener">windometer.info</a>{{end}}</p>{{end}}
         </div>
         <div class="camera-actions">
           {{if .Featured.Embed}}<button type="button" id="fullscreenBtn" title="{{T "camera.fullscreen"}}" aria-label="{{T "camera.fullscreen"}}">⛶</button>{{end}}

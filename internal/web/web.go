@@ -1151,6 +1151,10 @@ func ipcamFeed(alias string) []camFeed {
 // surfo.co.il shows on its weather page.
 const surfCycleChannel = "UCJB82Q8aRp7iXlVnV-0GhPw"
 
+// pickUpSurfChannel is Pick Up Surf's (Jack Ben On) YouTube channel, the
+// Kiryat Haim beach camera.
+const pickUpSurfChannel = "UCihDB3p52URxAGk0Jzrk-qQ"
+
 // cameraCatalog lists the cameras in picker order. Each is checked before it
 // is shown: a feed that is down, or would replay an ended broadcast, is not
 // embedded (see cameraStatus).
@@ -1158,9 +1162,12 @@ var cameraCatalog = []struct {
 	Key, Msg string
 	Feeds    []camFeed
 }{
-	// The second KH feed (YouTube Lemon5) is dropped: it kept serving a frozen
-	// frame. Add it back as a second feed when it is live again.
-	{"kh", "camera.kh", []camFeed{{IPCam: "6469b4554f45e", Embed: ipcamPlayer("6469b4554f45e", true)}}},
+	// Both KH feeds are Pick Up Surf's, the pair lemon5.biz shows on its
+	// Kiryat Haim beach camera page.
+	{"kh", "camera.kh", []camFeed{
+		{IPCam: "6469b4554f45e", Embed: ipcamPlayer("6469b4554f45e", true), Label: "camera.kh_main"},
+		{YouTube: "TZyEYU0DIJo", Channel: pickUpSurfChannel, Embed: youtubeEmbedURL("TZyEYU0DIJo"), Label: "camera.kh_alt"},
+	}},
 	{"ky", "camera.ky", []camFeed{
 		{YouTube: "9lbGbvFREx0", Channel: surfCycleChannel, Embed: youtubeEmbedURL("9lbGbvFREx0"), Label: "camera.ky_nw"},
 		{YouTube: "xwJTEInXEeE", Channel: surfCycleChannel, Embed: youtubeEmbedURL("xwJTEInXEeE"), Label: "camera.ky_sw"},
@@ -1278,6 +1285,7 @@ func (s *Server) handleCamera(w http.ResponseWriter, r *http.Request) {
 		Site       string // the owner's page, for a camera that cannot be embedded
 		Source     string
 		SourceHost string
+		WindSource string // the page of the live wind meter shown over the camera
 		HasWind    bool
 	}
 	tr := i18n.FromRequest(r)
@@ -1318,6 +1326,9 @@ func (s *Server) handleCamera(w http.ResponseWriter, r *http.Request) {
 		featured = camCard{
 			Key: c.Key, Name: tr.T(c.Msg), State: v.State.String(), Site: v.Site,
 			Source: v.Source, HasWind: c.Key == "kh",
+		}
+		if featured.HasWind {
+			featured.WindSource = "https://windometer.info/spot/pick-up-surf"
 		}
 		if u, err := url.Parse(v.Source); err == nil {
 			featured.SourceHost = strings.TrimPrefix(u.Host, "www.")

@@ -145,6 +145,9 @@ func probeCamera(ctx context.Context, f camFeed) camProbe {
 		return probeIPCam(ctx, f.IPCam)
 	}
 	p := probeYouTube(ctx, "https://www.youtube.com/watch?v="+url.QueryEscape(f.YouTube))
+	if p.State == camUnknown && probeLiveChat(ctx, f.YouTube) {
+		return camProbe{State: camLive, Embed: youtubeEmbedURL(f.YouTube)}
+	}
 	if p.State == camLive || f.Channel == "" {
 		return p
 	}
@@ -251,6 +254,20 @@ func probeYouTube(ctx context.Context, u string) camProbe {
 		return camProbe{}
 	}
 	return parseYouTubeState(body)
+}
+
+// probeLiveChat reports whether a video's live chat is running, which only a
+// live broadcast has. The chat page is not walled off from the server like the
+// watch page. Its absence proves nothing: a live stream can have chat turned
+// off, and then reads the same as an ended one.
+func probeLiveChat(ctx context.Context, id string) bool {
+	body, err := camGet(ctx, "https://www.youtube.com/live_chat?v="+url.QueryEscape(id), 4<<20)
+	return err == nil && liveChatRunning(body)
+}
+
+func liveChatRunning(page []byte) bool {
+	s := string(page)
+	return strings.Contains(s, `"liveChatRenderer"`) && !strings.Contains(s, `"isReplay":true`)
 }
 
 var (
