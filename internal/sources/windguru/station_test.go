@@ -32,3 +32,20 @@ func TestParseStationWithoutReadingTime(t *testing.T) {
 		t.Fatalf("SourceAt = %v, want zero", r.SourceAt)
 	}
 }
+
+func TestParseStationWithoutLullUsesAverage(t *testing.T) {
+	r, err := parseStation([]byte(`{"weather":{"wind_min":null,"wind_avg":8.7,"wind_max":9.7,"wind_direction":268,"unixtime":1791975000}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Wind != 8.7 || r.Gust != 9.7 {
+		t.Fatalf("wind/gust = %v/%v, want 8.7/9.7", r.Wind, r.Gust)
+	}
+	r, err = parseStation([]byte(`{"weather":{"wind_min":6.1,"wind_avg":8.7,"wind_max":9.7,"unixtime":1791975000}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Wind != 6.1 {
+		t.Fatalf("wind = %v, want the lull 6.1", r.Wind)
+	}
+}

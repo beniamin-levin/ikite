@@ -39,7 +39,8 @@ var Groups = []Group{
 	{Key: "bg", Name: "Bat Galim", Locs: []string{"bg"}},
 	{Key: "st", Name: "Shavei Tzion", Locs: []string{"st"}},
 	{Key: "15233", Name: "Betzet", Locs: []string{"15233"}},
-	{Key: "hp", Name: "Hadera", Locs: []string{"hp"}},
+	{Key: "hp", Name: "Sdot Yam", Locs: []string{"hp"}},
+	{Key: "by", Name: "Beit Yanai", Locs: []string{"by"}},
 }
 
 // Hour is one estimated hour for a group.

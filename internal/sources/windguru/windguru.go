@@ -41,10 +41,13 @@ func New(proxy *begetproxy.Client) *Client {
 
 type weatherResp struct {
 	Weather struct {
-		WindMin       float64 `json:"wind_min"`
-		WindMax       float64 `json:"wind_max"`
-		WindDirection float64 `json:"wind_direction"`
-		Temperature   float64 `json:"temperature"`
+		// Some stations (Freegull, 2259) report no lull: wind_min is null
+		// and wind_avg stands in for it.
+		WindMin       *float64 `json:"wind_min"`
+		WindAvg       *float64 `json:"wind_avg"`
+		WindMax       float64  `json:"wind_max"`
+		WindDirection float64  `json:"wind_direction"`
+		Temperature   float64  `json:"temperature"`
 		// When the station took this reading. A frozen station keeps returning
 		// its last reading with its old time — which is how stuck data is caught.
 		Unixtime int64 `json:"unixtime"`
@@ -79,8 +82,14 @@ func parseStation(body []byte) (*models.WindReading, error) {
 		return nil, err
 	}
 	temp := parsed.Weather.Temperature
+	var wind float64
+	if w := parsed.Weather.WindMin; w != nil {
+		wind = *w
+	} else if w := parsed.Weather.WindAvg; w != nil {
+		wind = *w
+	}
 	r := &models.WindReading{
-		Wind:    parsed.Weather.WindMin,
+		Wind:    wind,
 		Gust:    parsed.Weather.WindMax,
 		WindDir: parsed.Weather.WindDirection,
 		Temp:    &temp,

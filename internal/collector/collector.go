@@ -114,12 +114,33 @@ func (s *Service) collectPeers() []models.Spot {
 }
 
 func (s *Service) shouldCollectSpot(sp models.Spot, now time.Time, peers []models.Spot) (bool, string) {
-	last, err := s.Store.LatestWindPeriod(sp.ID)
+	return s.shouldCollectSpotAs(sp, sp.ID, now, peers)
+}
+
+// shouldCollectSpotAs checks sched's schedule against what loc last saved.
+func (s *Service) shouldCollectSpotAs(sched models.Spot, loc string, now time.Time, peers []models.Spot) (bool, string) {
+	last, err := s.Store.LatestWindPeriod(loc)
 	if err != nil {
-		s.Log.Warn("latest wind period", "loc", sp.ID, "err", err)
+		s.Log.Warn("latest wind period", "loc", loc, "err", err)
 	}
 	// Uses spots.visible from the DB (admin/settings), never client layout prefs.
-	return sp.ShouldCollectSlot(now, last, peers)
+	return sched.ShouldCollectSlot(now, last, peers)
+}
+
+// scheduleSpot is the spot whose collect schedule sp follows: its parent for a
+// secondary meter, itself otherwise. Collection still stops when sp itself is
+// switched off.
+func (s *Service) scheduleSpot(sp models.Spot) models.Spot {
+	parentID := models.SecondaryMeters[sp.ID]
+	if parentID == "" || !sp.Collect {
+		return sp
+	}
+	parent, err := s.Store.SpotByID(parentID)
+	if err != nil {
+		s.Log.Warn("secondary meter parent", "loc", sp.ID, "parent", parentID, "err", err)
+		return sp
+	}
+	return *parent
 }
 
 // RunWindguruStation fetches and saves one Windguru station (used by per-station timers).
@@ -132,21 +153,24 @@ func (s *Service) RunWindguruStation(now time.Time, stationID int) error {
 
 	now = now.In(s.Cfg.Timezone)
 	peers := s.collectPeers()
-	if ok, reason := s.shouldCollectSpot(*st, now, peers); !ok {
+	// A secondary meter keeps its parent's schedule, so both readings land in
+	// the same table slot and the parent's cell can combine them.
+	sched := s.scheduleSpot(*st)
+	if ok, reason := s.shouldCollectSpotAs(sched, st.ID, now, peers); !ok {
 		s.Log.Info("windguru skipped", "station", stationID, "loc", st.ID, "reason", reason)
 		return nil
 	}
 
 	// Keep visible spots inside the shared minute; stagger the rest lightly.
 	delay := rand.Intn(3) // 0–2s
-	if !st.Visible {
+	if !sched.Visible {
 		delay = 2 + rand.Intn(9) // 2–10s
 	}
-	s.Log.Info("windguru delay", "station", stationID, "seconds", delay, "visible", st.Visible)
+	s.Log.Info("windguru delay", "station", stationID, "seconds", delay, "visible", sched.Visible)
 	time.Sleep(time.Duration(delay) * time.Second)
 
 	now = time.Now().In(s.Cfg.Timezone)
-	if ok, reason := st.InCollectMinuteSlot(now, peers); !ok {
+	if ok, reason := sched.InCollectMinuteSlot(now, peers); !ok {
 		s.Log.Info("windguru skipped after delay", "station", stationID, "loc", st.ID, "reason", reason)
 		return nil
 	}
@@ -162,7 +186,7 @@ func (s *Service) RunWindguruStation(now time.Time, stationID int) error {
 	}
 
 	// Stamp onto the scheduled minute so visible spots share one table row key.
-	reading.Period = models.CollectSlotPeriod(time.Now().In(s.Cfg.Timezone), *st, peers)
+	reading.Period = models.CollectSlotPeriod(time.Now().In(s.Cfg.Timezone), sched, peers)
 	reading.Location = st.ID
 	if err := s.Store.InsertWind(*reading); err != nil {
 		return fmt.Errorf("insert wg wind: %w", err)

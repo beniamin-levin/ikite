@@ -20,7 +20,8 @@ type WGForecastService struct {
 }
 
 type WGForecastOptions struct {
-	Force bool // skip 7am window
+	Force bool   // skip 7am window
+	Spot  string // only this spot, and no gust alerts; empty for all
 }
 
 func (s *WGForecastService) Run(now time.Time, opts WGForecastOptions) error {
@@ -47,7 +48,7 @@ func (s *WGForecastService) Run(now time.Time, opts WGForecastOptions) error {
 	fetchedAt := now
 
 	for _, sp := range spots {
-		if sp.WindguruID == nil {
+		if sp.WindguruID == nil || (opts.Spot != "" && sp.ID != opts.Spot) {
 			continue
 		}
 
@@ -82,7 +83,7 @@ func (s *WGForecastService) Run(now time.Time, opts WGForecastOptions) error {
 		)
 	}
 
-	if s.Notify != nil {
+	if s.Notify != nil && opts.Spot == "" {
 		if err := s.Notify.Run(now); err != nil {
 			s.Log.Error("forecast gust notify", "err", err)
 		}

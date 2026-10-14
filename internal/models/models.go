@@ -54,6 +54,14 @@ type Spot struct {
 	CollectEndHour     int
 }
 
+// SecondaryMeters maps a spot that only carries an extra meter to the spot it
+// serves. Its readings are shown in that spot's cells, so a cell takes the
+// lower wind and the higher gust of both meters. It has no column, forecast or
+// estimate of its own, and the estimate is still calibrated on the main meter.
+var SecondaryMeters = map[string]string{
+	"2259": "hp", // Freegull Sea Sports, Sdot Yam beach; hp is Hadera Port IMS
+}
+
 // HasCoords reports whether the spot has usable lat/lon for point forecasts.
 func (sp Spot) HasCoords() bool {
 	return sp.Lat != nil && sp.Lon != nil && (*sp.Lat != 0 || *sp.Lon != 0)

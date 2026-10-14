@@ -77,12 +77,25 @@ func (s *EstimateService) Run(now time.Time, backfillDays int) error {
 	return nil
 }
 
+// calibrationMeter names, for a spot without a meter of its own, the nearby
+// spot whose meter and forecast history calibrate it. The models' bias there
+// is applied to the spot's own forecasts.
+var calibrationMeter = map[string]string{
+	"by": "hp", // Beit Yanai: Hadera Port, 10 km up the same straight coast
+}
+
 // runSpot returns the number of hours estimated for today-and-forward.
 func (s *EstimateService) runSpot(spot string, today, now time.Time, backfillDays int) (int, error) {
 	setup := defaultSetup
+	calSpot := spot
+	if m := calibrationMeter[spot]; m != "" {
+		// Its past forecasts would pair with another spot's meter, so there is
+		// nothing to replay.
+		calSpot, backfillDays = m, 0
+	}
 	histFrom := today.AddDate(0, 0, -(setup.historyDays + backfillDays))
 
-	obs, err := s.Store.HourlyObserved(spot, histFrom, today, estimateFromHour, estimateToHour)
+	obs, err := s.Store.HourlyObserved(calSpot, histFrom, today, estimateFromHour, estimateToHour)
 	if err != nil {
 		return 0, fmt.Errorf("observed: %w", err)
 	}
@@ -90,7 +103,7 @@ func (s *EstimateService) runSpot(spot string, today, now time.Time, backfillDay
 		s.Log.Info("estimate skipped", "spot", spot, "reason", "no meter data")
 		return 0, nil
 	}
-	past, err := s.Store.ListWindForecastByLocationRange(spot, histFrom, today.AddDate(0, 0, -1))
+	past, err := s.Store.ListWindForecastByLocationRange(calSpot, histFrom, today.AddDate(0, 0, -1))
 	if err != nil {
 		return 0, fmt.Errorf("past forecasts: %w", err)
 	}
@@ -102,7 +115,7 @@ func (s *EstimateService) runSpot(spot string, today, now time.Time, backfillDay
 	pastByHour := groupForecasts(past)
 	calHours := pastByHour
 	if setup.archive {
-		arch, err := s.Store.ListForecastArchive(spot, histFrom, today)
+		arch, err := s.Store.ListForecastArchive(calSpot, histFrom, today)
 		if err != nil {
 			return 0, fmt.Errorf("archive: %w", err)
 		}
@@ -129,7 +142,7 @@ func (s *EstimateService) runSpot(spot string, today, now time.Time, backfillDay
 	if err := s.Store.ReplaceWindEstimate(spot, today, time.Time{}, pts); err != nil {
 		return 0, fmt.Errorf("save: %w", err)
 	}
-	s.Log.Info("estimate saved", "spot", spot, "hours", len(pts), "models", cal.ModelNames(),
+	s.Log.Info("estimate saved", "spot", spot, "calibrated_on", calSpot, "hours", len(pts), "models", cal.ModelNames(),
 		"sigma_kt", fmt.Sprintf("%.2f", cal.Sigma))
 	return len(pts), nil
 }

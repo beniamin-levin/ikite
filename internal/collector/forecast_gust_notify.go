@@ -29,7 +29,7 @@ const (
 
 // internationalSpotIDs are spots excluded from forecast gust alerts: the ones
 // abroad, plus Merom, Zemach and Avney Eitan (Golan / Sea of Galilee), which
-// Ben does not want alerts for.
+// Ben does not want alerts for, and Beit Yanai, a forecast-only spot for /best.
 var internationalSpotIDs = map[string]bool{
 	"1091":  true, // Paros
 	"5500":  true, // Mykonos
@@ -40,6 +40,7 @@ var internationalSpotIDs = map[string]bool{
 	"5730":  true, // Merom
 	"5731":  true, // Zemach
 	"5732":  true, // Avney Eitan
+	"by":    true, // Beit Yanai
 }
 
 type ForecastGustNotifyService struct {

@@ -17,6 +17,7 @@ import (
 
 func main() {
 	force := flag.Bool("force", false, "run now (ignore 7am schedule and replace today's data)")
+	spot := flag.String("spot", "", "fetch only this spot id (no gust alerts)")
 	flag.Parse()
 
 	log := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
@@ -49,7 +50,7 @@ func main() {
 		Notify: notify,
 	}
 
-	if err := svc.Run(time.Now(), collector.WGForecastOptions{Force: *force}); err != nil {
+	if err := svc.Run(time.Now(), collector.WGForecastOptions{Force: *force, Spot: *spot}); err != nil {
 		log.Error("wg forecast failed", "err", err)
 		os.Exit(1)
 	}

@@ -390,6 +390,36 @@ func imsColumnName(parentID, imsLoc string) string {
 	}
 }
 
+// withoutSecondaryMeters drops the spots that only feed another spot's cells
+// (models.SecondaryMeters); they get no column or picker entry of their own.
+func withoutSecondaryMeters(spots []models.Spot) []models.Spot {
+	out := make([]models.Spot, 0, len(spots))
+	for _, sp := range spots {
+		if models.SecondaryMeters[sp.ID] == "" {
+			out = append(out, sp)
+		}
+	}
+	return out
+}
+
+// mergeSecondaryMeters files each secondary meter's readings under the spot it
+// serves, so that spot's cells take the lower wind and the higher gust of both.
+// A secondary reading with a gust but no wind is a meter that sent no lull, and
+// is dropped rather than pull the cell down to 0.
+func mergeSecondaryMeters(readings []models.WindReading) []models.WindReading {
+	out := readings[:0]
+	for _, rd := range readings {
+		if parent := models.SecondaryMeters[rd.Location]; parent != "" {
+			if rd.Wind == 0 && rd.Gust > 0 {
+				continue
+			}
+			rd.Location = parent
+		}
+		out = append(out, rd)
+	}
+	return out
+}
+
 // collectLayoutSpots returns wind-table layout keys (real spots + dedicated IMS columns).
 func collectLayoutSpots(spots []models.Spot) []struct {
 	Key     string
@@ -401,7 +431,7 @@ func collectLayoutSpots(spots []models.Spot) []struct {
 		Name    string
 		Display bool
 	}, 0, len(spots)+2)
-	for _, sp := range spots {
+	for _, sp := range withoutSecondaryMeters(spots) {
 		out = append(out, struct {
 			Key     string
 			Name    string
@@ -452,10 +482,12 @@ func (s *Server) buildIndexTableView(period string, now time.Time) (*indexTableV
 	if err != nil {
 		return nil, err
 	}
+	readings = mergeSecondaryMeters(readings)
 	collectSpots, err := s.Store.CollectSpots()
 	if err != nil {
 		return nil, err
 	}
+	collectSpots = withoutSecondaryMeters(collectSpots)
 
 	order := make([]string, 0, len(collectSpots))
 	titles := make(map[string]string, len(collectSpots))
@@ -1248,9 +1280,13 @@ func (s *Server) handleWindLiveAPI(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "failed to load spots", http.StatusInternalServerError)
 			return
 		}
-		for _, sp := range spots {
+		for _, sp := range withoutSecondaryMeters(spots) {
 			keys = append(keys, sp.ID)
 		}
+	}
+	secondaries := map[string][]string{}
+	for loc, parent := range models.SecondaryMeters {
+		secondaries[parent] = append(secondaries[parent], loc)
 	}
 
 	type spotWind struct {
@@ -1266,8 +1302,19 @@ func (s *Server) handleWindLiveAPI(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		sw := spotWind{Wind: wind, Gust: gust}
-		if period, err := s.Store.LatestWindPeriod(key); err == nil && !period.IsZero() {
+		period, err := s.Store.LatestWindPeriod(key)
+		if err == nil && !period.IsZero() {
 			sw.Period = period.In(s.Cfg.Timezone).Format(time.RFC3339)
+			// A secondary meter's reading from the same slot joins in: the
+			// lower wind and the higher gust of both, as in the table.
+			for _, sec := range secondaries[key] {
+				if p, err := s.Store.LatestWindPeriod(sec); err != nil || !p.Equal(period) {
+					continue
+				}
+				if w2, g2, err := s.Store.LatestWindGust(sec); err == nil && w2 != 0 {
+					sw.Wind, sw.Gust = math.Min(sw.Wind, w2), math.Max(sw.Gust, g2)
+				}
+			}
 		}
 		out[key] = sw
 	}
@@ -1408,7 +1455,7 @@ func (s *Server) handleForecast(w http.ResponseWriter, r *http.Request) {
 	spotNames := map[string]string{}
 	for _, sp := range spots {
 		spotNames[sp.ID] = sp.Name
-		if !sp.Collect {
+		if !sp.Collect || models.SecondaryMeters[sp.ID] != "" {
 			continue
 		}
 		collectSpots = append(collectSpots, sp)
@@ -1517,7 +1564,7 @@ func (s *Server) handleForecast(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			s.Log.Error("forecast actuals", "err", err)
 		} else {
-			for _, rd := range readings {
+			for _, rd := range mergeSecondaryMeters(readings) {
 				actualByLoc[rd.Location] = append(actualByLoc[rd.Location], rd)
 			}
 			for loc := range actualByLoc {
