@@ -131,6 +131,24 @@ func findStrongest(est []models.WindEstimate, now time.Time, lang string) *stron
 	}
 }
 
+// mergeNowcast puts the hourly re-issue in place of the morning estimate for
+// the hours it covers.
+func mergeNowcast(est, nc []models.WindEstimate) []models.WindEstimate {
+	byHour := make(map[string]models.WindEstimate, len(nc))
+	for _, n := range nc {
+		byHour[hourKey(n.Period)] = n
+	}
+	out := make([]models.WindEstimate, len(est))
+	for i, e := range est {
+		if n, ok := byHour[hourKey(e.Period)]; ok {
+			e = n
+			e.Location = est[i].Location
+		}
+		out[i] = e
+	}
+	return out
+}
+
 func (c *expectedChart) JSON() ([]byte, error) { return json.Marshal(c) }
 
 func round1(v float64) *float64 {

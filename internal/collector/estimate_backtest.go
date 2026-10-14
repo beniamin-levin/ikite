@@ -14,6 +14,11 @@ type backtestScore struct {
 	n, nStrong, inRange, ng int
 	absErr, err, absStrong  float64
 	strongErr, gustAbs      float64
+	above, below            int // measured above the range's top / below its bottom
+	// Hours the estimate itself called ≥ 11 kt: judged by what was forecast,
+	// so unlike the ≥15 kt-measured figures they carry no selection bias.
+	nCalled              int
+	absCalled, errCalled float64
 }
 
 func (b *backtestScore) add(p estimate.Point, obs, gustPeak float64) {
@@ -21,8 +26,18 @@ func (b *backtestScore) add(p estimate.Point, obs, gustPeak float64) {
 	b.n++
 	b.absErr += math.Abs(e)
 	b.err += e
-	if obs >= p.Low && obs <= p.High {
+	switch {
+	case obs > p.High:
+		b.above++
+	case obs < p.Low:
+		b.below++
+	default:
 		b.inRange++
+	}
+	if p.Wind >= 11 {
+		b.nCalled++
+		b.absCalled += math.Abs(e)
+		b.errCalled += e
 	}
 	if obs >= 15 {
 		b.nStrong++
@@ -45,6 +60,11 @@ func (b *backtestScore) merge(o backtestScore) {
 	b.absStrong += o.absStrong
 	b.strongErr += o.strongErr
 	b.gustAbs += o.gustAbs
+	b.above += o.above
+	b.below += o.below
+	b.nCalled += o.nCalled
+	b.absCalled += o.absCalled
+	b.errCalled += o.errCalled
 }
 
 func (b backtestScore) String() string {
@@ -54,8 +74,10 @@ func (b backtestScore) String() string {
 		}
 		return x / float64(n)
 	}
-	return fmt.Sprintf("hours %4d  MAE %.2f  bias %+.2f  in-range %3.0f%%  ≥15kt: %3d h MAE %.2f bias %+.2f  gust MAE %.2f",
+	return fmt.Sprintf("hours %4d  MAE %.2f  bias %+.2f  in-range %3.0f%% (above %2.0f%% below %2.0f%%)  called≥11: %3d h MAE %.2f bias %+.2f  meas≥15: %3d h MAE %.2f bias %+.2f  gust MAE %.2f",
 		b.n, div(b.absErr, b.n), div(b.err, b.n), 100*div(float64(b.inRange), b.n),
+		100*div(float64(b.above), b.n), 100*div(float64(b.below), b.n),
+		b.nCalled, div(b.absCalled, b.nCalled), div(b.errCalled, b.nCalled),
 		b.nStrong, div(b.absStrong, b.nStrong), div(b.strongErr, b.nStrong), div(b.gustAbs, b.ng))
 }
 
@@ -71,16 +93,20 @@ func (s *EstimateService) Backtest(w io.Writer, now time.Time, days int) error {
 	if err != nil {
 		return fmt.Errorf("collect spots: %w", err)
 	}
-	dir := estimate.DefaultOptions
+	cur := defaultSetup.opt
+	with := func(f func(*estimate.Options)) estimateSetup {
+		o := cur
+		f(&o)
+		return estimateSetup{estimateHistoryDays, false, o}
+	}
 	methods := []struct {
 		name  string
 		setup estimateSetup
 	}{
-		{"saved, 60 d, no direction", estimateSetup{60, false, estimate.Options{}}},
-		{"saved, 60 d              ", estimateSetup{60, false, dir}},
-		{"+ archive, 60 d          ", estimateSetup{60, true, dir}},
-		{"+ archive, 1 year        ", estimateSetup{365, true, dir}},
-		{"+ archive, 3 years       ", estimateSetup{1100, true, dir}},
+		{"no direction, no strength", with(func(o *estimate.Options) { *o = estimate.Options{} })},
+		{"direction only           ", with(func(o *estimate.Options) { o.ByStrength = false })},
+		{"current                  ", estimateSetup{estimateHistoryDays, false, cur}},
+		{"+ archive                ", estimateSetup{estimateHistoryDays, true, cur}},
 	}
 	maxDays := 0
 	for _, m := range methods {
@@ -134,7 +160,7 @@ func (s *EstimateService) Backtest(w io.Writer, now time.Time, days int) error {
 				}
 			}
 		}
-		if scores[1].n == 0 {
+		if scores[2].n == 0 {
 			continue
 		}
 		fmt.Fprintf(w, "%s (%s), archive hours %d\n", sp.Name, sp.ID, len(arch))

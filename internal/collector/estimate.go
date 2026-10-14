@@ -3,6 +3,7 @@ package collector
 import (
 	"fmt"
 	"log/slog"
+	"sort"
 	"time"
 
 	"github.com/ben/ikite-go/internal/config"
@@ -200,11 +201,70 @@ func deadMeterDays(obs []models.ObservedHour) map[string]bool {
 	return dead
 }
 
+// stuckZeroHours finds runs of stuckZeroRun or more consecutive hours with the
+// meter at 0 kt while the models' median says at least stuckModelWind. A whole
+// dead day is caught by deadMeterDays; this catches a meter that drops out for
+// part of a windy day, which would otherwise teach the estimate that the
+// models over-forecast.
+const (
+	stuckZeroWind  = 0.5
+	stuckModelWind = 7.0
+)
+
+func median(v []float64) float64 {
+	s := append([]float64(nil), v...)
+	sort.Float64s(s)
+	n := len(s)
+	if n%2 == 1 {
+		return s[n/2]
+	}
+	return (s[n/2-1] + s[n/2]) / 2
+}
+
+func stuckZeroHours(obs []models.ObservedHour, fc map[string]*hourForecasts) map[string]bool {
+	const stuckZeroRun = 3
+	sorted := append([]models.ObservedHour(nil), obs...)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Hour.Before(sorted[j].Hour) })
+	out := map[string]bool{}
+	var run []string
+	flush := func() {
+		if len(run) >= stuckZeroRun {
+			for _, k := range run {
+				out[k] = true
+			}
+		}
+		run = run[:0]
+	}
+	var prev time.Time
+	for _, o := range sorted {
+		k := wallHour(o.Hour)
+		h, ok := fc[k]
+		windy := false
+		if ok {
+			var w []float64
+			for _, f := range h.forecasts {
+				w = append(w, f.Wind)
+			}
+			windy = len(w) > 0 && median(w) >= stuckModelWind
+		}
+		if o.Wind > stuckZeroWind || !windy || (len(run) > 0 && o.Hour.Sub(prev) != time.Hour) {
+			flush()
+		}
+		if o.Wind <= stuckZeroWind && windy {
+			run = append(run, k)
+		}
+		prev = o.Hour
+	}
+	flush()
+	return out
+}
+
 func pairHistory(obs []models.ObservedHour, fc map[string]*hourForecasts) []datedPast {
 	var out []datedPast
 	dead := deadMeterDays(obs)
+	stuck := stuckZeroHours(obs, fc)
 	for _, o := range obs {
-		if dead[o.Hour.Format("2006-01-02")] {
+		if dead[o.Hour.Format("2006-01-02")] || stuck[wallHour(o.Hour)] {
 			continue
 		}
 		h, ok := fc[wallHour(o.Hour)]

@@ -770,7 +770,7 @@
       </div>
       {{/* LTR on purpose: time runs left to right on every chart on the site. */}}
       <div class="expected-scroll" dir="ltr"><div id="expectedChart" class="expected-chart"></div></div>
-      <p class="expected-note">{{T "forecast.est_note"}}{{with .Accuracy}}{{if .EstCoverage}} {{T "forecast.est_note_range" .EstCoverage}}{{end}}{{end}}</p>
+      <p class="expected-note">{{T "forecast.est_note"}}{{if .NowcastAt}} {{T "forecast.est_note_nowcast" .NowcastAt}}{{end}}{{with .Accuracy}}{{if .EstCoverage}} {{T "forecast.est_note_range" .EstCoverage}}{{end}}{{end}}</p>
     </section>
     {{end}}
 

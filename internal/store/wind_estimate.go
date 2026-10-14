@@ -11,6 +11,22 @@ import (
 // `to` means open-ended. The daily job replaces today-and-forward; the backfill
 // replaces one day at a time.
 func (s *Store) ReplaceWindEstimate(location string, from, to time.Time, rows []models.WindEstimate) error {
+	return s.replaceEstimateRows("wind_estimate", location, from, to, rows)
+}
+
+// ReplaceWindNowcast is ReplaceWindEstimate for the hourly in-day re-issue,
+// kept apart so wind_estimate keeps the morning issue the accuracy panel scores.
+func (s *Store) ReplaceWindNowcast(location string, from, to time.Time, rows []models.WindEstimate) error {
+	return s.replaceEstimateRows("wind_nowcast", location, from, to, rows)
+}
+
+// ListWindNowcast is ListWindEstimate for wind_nowcast.
+func (s *Store) ListWindNowcast(location string, from, to time.Time) ([]models.WindEstimate, error) {
+	return s.listEstimateRows("wind_nowcast", location, from, to)
+}
+
+// table is one of two constants above, never user input.
+func (s *Store) replaceEstimateRows(table, location string, from, to time.Time, rows []models.WindEstimate) error {
 	tx, err := s.DB.Begin()
 	if err != nil {
 		return err
@@ -19,9 +35,9 @@ func (s *Store) ReplaceWindEstimate(location string, from, to time.Time, rows []
 
 	fromS := from.Format("2006-01-02 15:04:05")
 	if to.IsZero() {
-		_, err = tx.Exec(`DELETE FROM wind_estimate WHERE location = ? AND period >= ?`, location, fromS)
+		_, err = tx.Exec(`DELETE FROM `+table+` WHERE location = ? AND period >= ?`, location, fromS)
 	} else {
-		_, err = tx.Exec(`DELETE FROM wind_estimate WHERE location = ? AND period >= ? AND period < ?`,
+		_, err = tx.Exec(`DELETE FROM `+table+` WHERE location = ? AND period >= ? AND period < ?`,
 			location, fromS, to.Format("2006-01-02 15:04:05"))
 	}
 	if err != nil {
@@ -33,7 +49,7 @@ func (s *Store) ReplaceWindEstimate(location string, from, to time.Time, rows []
 			dir = int(r.Dir + 0.5)
 		}
 		if _, err := tx.Exec(`
-			INSERT INTO wind_estimate
+			INSERT INTO `+table+`
 				(location, period, wind, gust, wind_low, wind_high, wind_dir, models, issued_at)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			location, r.Period.Format("2006-01-02 15:04:05"), r.Wind, r.Gust, r.Low, r.High, dir,
@@ -46,10 +62,14 @@ func (s *Store) ReplaceWindEstimate(location string, from, to time.Time, rows []
 
 // ListWindEstimate returns a spot's estimate rows with period in [from, to).
 func (s *Store) ListWindEstimate(location string, from, to time.Time) ([]models.WindEstimate, error) {
+	return s.listEstimateRows("wind_estimate", location, from, to)
+}
+
+func (s *Store) listEstimateRows(table, location string, from, to time.Time) ([]models.WindEstimate, error) {
 	rows, err := s.DB.Query(`
 		SELECT DATE_FORMAT(period, '%Y-%m-%d %H:%i:%s'), wind, gust, wind_low, wind_high, wind_dir, models,
 		       DATE_FORMAT(issued_at, '%Y-%m-%d %H:%i:%s')
-		FROM wind_estimate
+		FROM `+table+`
 		WHERE location = ? AND period >= ? AND period < ?
 		ORDER BY period`,
 		location, from.Format("2006-01-02 15:04:05"), to.Format("2006-01-02 15:04:05"))

@@ -19,6 +19,7 @@ import (
 
 	"golang.org/x/sync/singleflight"
 
+	"github.com/ben/ikite-go/internal/bestweek"
 	"github.com/ben/ikite-go/internal/config"
 	"github.com/ben/ikite-go/internal/i18n"
 	"github.com/ben/ikite-go/internal/models"
@@ -166,6 +167,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /prediction", s.handlePrediction)
 	mux.HandleFunc("GET /api/prediction", s.handlePredictionAPI)
 	mux.HandleFunc("GET /forecast", s.handleForecast)
+	mux.HandleFunc("GET /best", s.handleBest)
 	mux.HandleFunc("GET /spots/rating", s.handleSpotsRating)
 	mux.HandleFunc("GET /spots/map", s.handleSpotsMap)
 	mux.HandleFunc("GET /spots/details", s.handleSpotDetails)
@@ -1701,9 +1703,17 @@ func (s *Server) handleForecast(w http.ResponseWriter, r *http.Request) {
 	// measured so far, so the chart shows how the estimate is tracking today.
 	var expectedChartJSON template.JS
 	var strongest *strongestHour
+	var nowcastAt string
 	if estRows, err := s.Store.ListWindEstimate(selected, fromDate, toDate.AddDate(0, 0, 1)); err != nil {
 		s.Log.Error("forecast estimate", "spot", selected, "err", err)
 	} else if len(estRows) > 0 {
+		// Today's remaining hours, re-issued hourly from the meter.
+		if nc, err := s.Store.ListWindNowcast(selected, today, today.AddDate(0, 0, 1)); err != nil {
+			s.Log.Error("forecast nowcast", "spot", selected, "err", err)
+		} else if len(nc) > 0 {
+			estRows = mergeNowcast(estRows, nc)
+			nowcastAt = nc[0].IssuedAt.Format("15:04")
+		}
 		var measured []models.ObservedHour
 		if fromDate.Before(now) {
 			if measured, err = s.Store.HourlyObserved(selected, fromDate, now, chartFromHour, chartToHour); err != nil {
@@ -1734,6 +1744,7 @@ func (s *Server) handleForecast(w http.ResponseWriter, r *http.Request) {
 		"Accuracy":            s.modelAccuracyFor(r.Context(), selected, now),
 		"ExpectedChart":       expectedChartJSON,
 		"Strongest":           strongest,
+		"NowcastAt":           nowcastAt,
 		"HasData":             len(dayCards) > 0,
 		"DayCards":            dayCards,
 		"Overview":            overview,
@@ -2404,6 +2415,104 @@ func forecastModelTitle(label string) string {
 		return "IFS - Integrated Forecasting System (ECMWF)"
 	default:
 		return label
+	}
+}
+
+type bestCell struct {
+	Wind  int
+	CSS   string
+	Kite  bool
+	Empty bool
+}
+
+type bestRow struct {
+	Name     string
+	Window   string
+	Mean     int
+	Peak     int
+	Gust     int
+	Dir      string
+	KiteBand int
+	Gusty    bool
+	Kiteable bool
+	Cells    []bestCell
+}
+
+type bestDay struct {
+	Label    string
+	Kiteable bool
+	Best     *bestRow
+	Rows     []bestRow
+}
+
+// handleBest shows where and when the kite wind is best on each of the next
+// seven days, from the ikite estimate.
+func (s *Server) handleBest(w http.ResponseWriter, r *http.Request) {
+	now := time.Now().In(s.Cfg.Timezone)
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, s.Cfg.Timezone)
+	plan, err := bestweek.Load(s.Store, today, 7)
+	if err != nil {
+		s.Log.Error("best days", "err", err)
+		http.Error(w, "failed to load the estimate", http.StatusInternalServerError)
+		return
+	}
+	he := i18n.Resolve(r) == i18n.LangHE
+	heDays := []string{"א'", "ב'", "ג'", "ד'", "ה'", "ו'", "ש'"}
+
+	var hours []int
+	for h := bestweek.FromHour; h <= bestweek.ToHour; h++ {
+		hours = append(hours, h)
+	}
+	var days []bestDay
+	for _, d := range plan {
+		if len(d.Spots) == 0 {
+			continue
+		}
+		label := d.Date.Format("Mon 2 Jan")
+		if he {
+			label = "יום " + heDays[int(d.Date.Weekday())] + " " + d.Date.Format("2/1")
+		}
+		day := bestDay{Label: label, Kiteable: d.Kiteable()}
+		for _, sd := range d.Spots {
+			row := bestRow{
+				Name:     sd.Group.Name,
+				Window:   sd.Window(),
+				Mean:     int(math.Round(sd.Mean)),
+				Peak:     int(math.Round(sd.Peak.Wind)),
+				Gust:     int(math.Round(sd.Peak.Gust)),
+				Dir:      bestweek.Compass(sd.Peak.Dir),
+				KiteBand: bestweek.KiteBand(sd.Mean),
+				Gusty:    sd.Gusty(),
+				Kiteable: sd.RunHours >= 2,
+			}
+			byHour := map[int]bestweek.Hour{}
+			for _, h := range sd.Hours {
+				byHour[h.Hour] = h
+			}
+			for _, h := range hours {
+				eh, ok := byHour[h]
+				if !ok {
+					row.Cells = append(row.Cells, bestCell{Empty: true})
+					continue
+				}
+				row.Cells = append(row.Cells, bestCell{
+					Wind: int(math.Round(eh.Wind)),
+					CSS:  models.WindCSSClass(eh.Wind),
+					Kite: eh.Wind >= bestweek.KiteWind,
+				})
+			}
+			day.Rows = append(day.Rows, row)
+		}
+		day.Best = &day.Rows[0]
+		days = append(days, day)
+	}
+	data := map[string]any{
+		"Active": "best",
+		"Hours":  hours,
+		"Days":   days,
+	}
+	if err := s.render(w, r, "best.html", data); err != nil {
+		s.Log.Error("render best", "err", err)
 	}
 }
 

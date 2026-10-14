@@ -7,6 +7,10 @@ import (
 
 func near(a, b, tol float64) bool { return math.Abs(a-b) <= tol }
 
+// noStrength isolates the time-of-day and weighting mechanics from the
+// strength split.
+var noStrength = Options{ByDirection: true}
+
 // history builds n hours where the meter reads `real` and each model forecasts
 // real+bias, with the given per-hour noise pattern (repeated).
 func history(n int, real float64, models map[string]struct {
@@ -33,7 +37,7 @@ func TestFitRemovesBiasAndTrustsTheSteadyModel(t *testing.T) {
 		"steady": {bias: +3, noise: []float64{-0.5, 0.5}}, // always 3 kt high, but consistent
 		"noisy":  {bias: 0, noise: []float64{-4, 4}},      // right on average, all over the place
 	})
-	c := Fit(h)
+	c := FitWith(h, noStrength) // the test forecasts span strength bands
 	if !c.Usable() {
 		t.Fatal("two models with 100 hours each should be usable")
 	}
@@ -149,7 +153,7 @@ func TestGustCorrectedAndNeverBelowWind(t *testing.T) {
 			{Model: "b", Wind: 12 - e, Gust: 24 - e, Dir: -1},
 		}})
 	}
-	c := Fit(h)
+	c := FitWith(h, noStrength) // the test forecasts span strength bands
 	p, _ := c.Estimate(12, []Forecast{{Model: "a", Wind: 12, Gust: 26, Dir: -1}, {Model: "b", Wind: 12, Gust: 24, Dir: -1}})
 	if !near(p.Gust, 18, 1e-6) {
 		t.Fatalf("gust = %.2f, want the measured 18 once the +8/+6 bias is removed", p.Gust)
@@ -178,7 +182,7 @@ func TestBiasDependsOnTimeOfDay(t *testing.T) {
 			}})
 		}
 	}
-	c := Fit(h)
+	c := FitWith(h, noStrength) // the test forecasts span strength bands
 	a := c.Models["a"]
 	if !a.Block[1].OK || !near(a.Block[1].Bias, 4, 1e-9) || !near(a.Block[0].Bias, 0, 1e-9) {
 		t.Fatalf("blocks = %+v", a.Block)
@@ -235,7 +239,7 @@ func TestGustBiasDependsOnTimeOfDay(t *testing.T) {
 			}})
 		}
 	}
-	c := Fit(h)
+	c := FitWith(h, noStrength) // the test forecasts span strength bands
 	fs := []Forecast{{Model: "a", Wind: 12, Gust: 24, Dir: -1}, {Model: "b", Wind: 12, Gust: 24, Dir: -1}}
 	mid, _ := c.Estimate(14, fs)
 	eve, _ := c.Estimate(19, fs)
@@ -272,5 +276,35 @@ func TestBiasDependsOnDirection(t *testing.T) {
 	}
 	if !(pd.Wind > pp.Wind) {
 		t.Fatalf("direction-aware %.2f should beat the averaged bias %.2f in a northerly", pd.Wind, pp.Wind)
+	}
+}
+
+// A model that reads 4 kt high whenever it forecasts a strong wind but is right
+// in light air: one bias for the block would split the difference and be 2 kt
+// off both ways; the strength split gets both right.
+func TestBiasDependsOnStrength(t *testing.T) {
+	var h []Past
+	for d := 0; d < 60; d++ {
+		real := 6.0
+		over := 0.0
+		if d%2 == 0 {
+			real, over = 14, 4
+		}
+		h = append(h, Past{Hour: 13, Wind: real, Forecasts: []Forecast{
+			{Model: "a", Wind: real + over, Dir: -1}, {Model: "b", Wind: real, Dir: -1},
+		}})
+	}
+	by := FitWith(h, Options{ByStrength: true})
+	plain := FitWith(h, Options{})
+	strong := []Forecast{{Model: "a", Wind: 18, Dir: -1}, {Model: "b", Wind: 14, Dir: -1}}
+	p, _ := by.Estimate(13, strong)
+	q, _ := plain.Estimate(13, strong)
+	if math.Abs(p.Wind-14) >= math.Abs(q.Wind-14) || !near(p.Wind, 14, 0.8) {
+		t.Fatalf("strong hour: split %.2f, plain %.2f, want ≈14", p.Wind, q.Wind)
+	}
+	light := []Forecast{{Model: "a", Wind: 6, Dir: -1}, {Model: "b", Wind: 6, Dir: -1}}
+	p, _ = by.Estimate(13, light)
+	if !near(p.Wind, 6, 0.8) {
+		t.Fatalf("light hour: split %.2f, want ≈6", p.Wind)
 	}
 }

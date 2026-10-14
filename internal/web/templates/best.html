@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="{{lang}}" dir="{{dir}}" data-theme="{{theme}}">
+<head>
+  <meta charset="UTF-8" />
+  <title>{{T "title.best"}}</title>
+  {{template "head_common" .}}
+  <style>
+    .best-day { margin-bottom: 16px; }
+    .best-day h2 { margin: 0 0 4px; font-size: 1.1rem; }
+    .best-verdict { margin: 0 0 12px; }
+    .best-verdict.none { color: var(--muted); }
+    .best-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .best-table { border-collapse: collapse; width: 100%; font-size: 0.85rem; }
+    .best-table th, .best-table td { padding: 4px 5px; text-align: center; white-space: nowrap; }
+    .best-table th { color: var(--muted); font-weight: 500; }
+    .best-table td.best-spot { text-align: start; font-weight: 600; }
+    .best-table td.best-cell { min-width: 24px; border-radius: 4px; }
+    .best-table td.best-cell.kite { outline: 2px solid var(--accent-text); outline-offset: -2px; }
+    .best-table td.best-cell.empty { color: var(--muted); }
+    .best-table tr.dim td.best-spot, .best-table tr.dim td.best-info { color: var(--muted); font-weight: 400; }
+    .best-table td.best-info { text-align: start; }
+    .best-note { color: var(--muted); font-size: 0.85rem; }
+  </style>
+</head>
+<body>
+  {{template "nav" .}}
+  <main class="page">
+    <h1>{{T "best.heading"}}</h1>
+    <p class="best-note">{{T "best.subtitle"}}</p>
+    {{range .Days}}
+    <section class="card best-day">
+      <h2>{{.Label}}</h2>
+      {{if .Kiteable}}
+      <p class="best-verdict"><strong>{{.Best.Name}}</strong> <span dir="ltr">{{.Best.Window}}</span>,
+        {{T "best.verdict_wind" .Best.Mean .Best.Peak .Best.Gust}}{{if .Best.Dir}} <span dir="ltr">{{.Best.Dir}}</span>{{end}}
+        — {{T (printf "best.kite_%d" .Best.KiteBand)}}{{if .Best.Gusty}}, {{T "best.gusty"}}{{end}}</p>
+      {{else}}
+      <p class="best-verdict none">{{T "best.none" .Best.Name .Best.Peak}}</p>
+      {{end}}
+      <div class="best-scroll">
+        <table class="best-table">
+          <thead>
+            <tr>
+              <th></th>
+              {{range $.Hours}}<th>{{printf "%02d" .}}</th>{{end}}
+              <th>{{T "best.col_window"}}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{range .Rows}}
+            <tr{{if not .Kiteable}} class="dim"{{end}}>
+              <td class="best-spot">{{.Name}}</td>
+              {{range .Cells}}{{if .Empty}}<td class="best-cell empty">·</td>{{else}}<td class="best-cell {{.CSS}}{{if .Kite}} kite{{end}}">{{.Wind}}</td>{{end}}{{end}}
+              <td class="best-info">{{if .Kiteable}}<span dir="ltr">{{.Window}}</span>{{else}}—{{end}}</td>
+            </tr>
+            {{end}}
+          </tbody>
+        </table>
+      </div>
+    </section>
+    {{else}}
+    <p class="best-note">{{T "best.empty"}}</p>
+    {{end}}
+    <p class="best-note">{{T "best.legend"}}</p>
+  </main>
+</body>
+</html>
