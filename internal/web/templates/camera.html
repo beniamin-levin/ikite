@@ -152,6 +152,7 @@
       margin-right: 6px;
     }
     .live-line.down { color: var(--cam-down); }
+    .camera-card-head p.camera-source a { color: var(--cam-accent); }
     .live-line.down span { background: var(--cam-down); }
     .video-offline {
       position: absolute;
@@ -531,6 +532,7 @@
           {{else}}
           <p>{{T "camera.meta_unknown"}}</p>
           {{end}}
+          {{if .Featured.Source}}<p class="camera-source">{{T "camera.source"}} <a href="{{.Featured.Source}}" target="_blank" rel="noopener">{{.Featured.SourceHost}}</a></p>{{end}}
         </div>
         <div class="camera-actions">
           {{if .Featured.Embed}}<button type="button" id="fullscreenBtn" title="{{T "camera.fullscreen"}}" aria-label="{{T "camera.fullscreen"}}">⛶</button>{{end}}

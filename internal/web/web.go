@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"math"
 	"net/http"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -1188,6 +1189,29 @@ type cameraView struct {
 	Embeds []string
 	Labels []string
 	Site   string
+	Source string // where the camera itself can be watched
+}
+
+// camSource is the page of the stream itself: the ipcamlive player, the
+// YouTube broadcast (its channel when none is shown), or the owner's site for
+// a camera locked to it.
+func camSource(f camFeed, embed, site string) string {
+	if site != "" {
+		return site
+	}
+	if f.IPCam != "" {
+		return "https://ipcamlive.com/player/player.php?alias=" + url.QueryEscape(f.IPCam)
+	}
+	if embed != "" {
+		if i := strings.Index(embed, "/embed/"); i >= 0 {
+			id, _, _ := strings.Cut(embed[i+len("/embed/"):], "?")
+			return "https://www.youtube.com/watch?v=" + id
+		}
+	}
+	if f.Channel != "" {
+		return "https://www.youtube.com/channel/" + f.Channel
+	}
+	return "https://www.youtube.com/watch?v=" + f.YouTube
 }
 
 func viewCamera(feeds []camFeed, probes map[string]camProbe) cameraView {
@@ -1226,6 +1250,13 @@ func viewCamera(feeds []camFeed, probes map[string]camProbe) cameraView {
 	if len(v.Embeds) == 0 && blocked == len(feeds) {
 		v.State = camBlocked
 	}
+	if len(feeds) > 0 {
+		embed := ""
+		if len(v.Embeds) > 0 {
+			embed = v.Embeds[0]
+		}
+		v.Source = camSource(feeds[0], embed, v.Site)
+	}
 	return v
 }
 
@@ -1245,6 +1276,8 @@ func (s *Server) handleCamera(w http.ResponseWriter, r *http.Request) {
 		ExtraLabel string
 		State      string
 		Site       string // the owner's page, for a camera that cannot be embedded
+		Source     string
+		SourceHost string
 		HasWind    bool
 	}
 	tr := i18n.FromRequest(r)
@@ -1284,7 +1317,10 @@ func (s *Server) handleCamera(w http.ResponseWriter, r *http.Request) {
 		v := viewCamera(c.Feeds, probes)
 		featured = camCard{
 			Key: c.Key, Name: tr.T(c.Msg), State: v.State.String(), Site: v.Site,
-			HasWind: c.Key == "kh",
+			Source: v.Source, HasWind: c.Key == "kh",
+		}
+		if u, err := url.Parse(v.Source); err == nil {
+			featured.SourceHost = strings.TrimPrefix(u.Host, "www.")
 		}
 		if len(v.Embeds) > 0 {
 			featured.Embed = v.Embeds[0]

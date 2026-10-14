@@ -153,3 +153,31 @@ func TestCameraUnknownStillEmbeds(t *testing.T) {
 		t.Fatal("expected a grey dot")
 	}
 }
+
+func TestCameraSourceLink(t *testing.T) {
+	cases := map[string]string{
+		"kh": `href="https://ipcamlive.com/player/player.php?alias=6469b4554f45e"`,
+		"ky": `href="https://www.youtube.com/channel/UCJB82Q8aRp7iXlVnV-0GhPw"`,
+	}
+	probe := func(_ context.Context, f camFeed) camProbe {
+		if f.YouTube != "" {
+			return camProbe{State: camOffline}
+		}
+		return camProbe{State: camLive}
+	}
+	for cam, want := range cases {
+		if body := cameraPage(t, cam, probe); !strings.Contains(body, want) {
+			t.Errorf("%s: expected source link %s", cam, want)
+		}
+	}
+	body := cameraPage(t, "hilton", func(context.Context, camFeed) camProbe {
+		return camProbe{State: camBlocked, Site: "https://beachcam.co.il/"}
+	})
+	if !strings.Contains(body, `class="camera-source">Source: <a href="https://beachcam.co.il/"`) {
+		t.Error("hilton: expected the owner's site as the source")
+	}
+	body = cameraPage(t, "ky", probeAll(camLive))
+	if !strings.Contains(body, `href="https://www.youtube.com/watch?v=9lbGbvFREx0"`) {
+		t.Error("ky live: expected the broadcast as the source")
+	}
+}
