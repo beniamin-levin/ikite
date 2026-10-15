@@ -50,6 +50,8 @@
     .lm-pin[data-side="bottom"] .lm-label { left: 0; top: 9px; transform: translateX(-50%); }
     .lm-pin[data-side="right"] .lm-label { left: 9px; top: 0; transform: translateY(-50%); }
     .lm-pin[data-side="left"] .lm-label { right: 9px; top: 0; transform: translateY(-50%); }
+    .lm-pin[data-side="none"] .lm-label { visibility: hidden; }
+    .lm-label.lm-none { background: var(--card-bg); opacity: 0.7; }
     .lm-label strong { font-size: 0.95rem; }
     .lm-label small { color: var(--text); opacity: 0.75; }
     .lm-label .lm-name { font-size: 0.68rem; opacity: 0.85; max-width: 7.5rem; overflow: hidden; text-overflow: ellipsis; }
@@ -104,6 +106,6 @@
       lang: {{lang}}
     };
   </script>
-  <script src="/static/livemap.js?v=7"></script>
+  <script src="/static/livemap.js?v=8"></script>
 </body>
 </html>

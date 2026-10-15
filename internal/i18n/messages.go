@@ -161,6 +161,8 @@ var enMessages = map[string]string{
 	"livemap.no_data":        "No readings in the last day and a half.",
 	"livemap.table":          "Table",
 	"livemap.forecast":       "Forecast",
+	"livemap.camera":         "Camera",
+	"livemap.no_reading":     "No reading in the last day and a half.",
 	"livemap.particles":      "Particles",
 	"livemap.legend_fresh":   "up to 15 min",
 	"livemap.legend_late":    "up to 1 h",
@@ -480,6 +482,8 @@ var heMessages = map[string]string{
 	"livemap.no_data":        "אין קריאות ביום וחצי האחרונים.",
 	"livemap.table":          "טבלה",
 	"livemap.forecast":       "תחזית",
+	"livemap.camera":         "מצלמה",
+	"livemap.no_reading":     "אין קריאה ביום וחצי האחרונים.",
 	"livemap.particles":      "חלקיקים",
 	"livemap.legend_fresh":   "עד 15 דק׳",
 	"livemap.legend_late":    "עד שעה",
@@ -666,7 +670,7 @@ func clientMessages(lang string) map[string]string {
 		"prediction.meta_source", "prediction.meta_similar", "prediction.meta_readings",
 		"map.popup_score", "map.popup_details", "map.popup_archive",
 		"livemap.updated", "livemap.ago_min", "livemap.ago_h", "livemap.now",
-		"livemap.no_data", "livemap.table", "livemap.forecast",
+		"livemap.no_data", "livemap.table", "livemap.forecast", "livemap.camera", "livemap.no_reading",
 		"dt.search", "dt.empty", "dt.zero",
 	}
 	out := make(map[string]string, len(keys))

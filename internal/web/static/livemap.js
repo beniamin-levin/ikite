@@ -27,17 +27,16 @@
   if (!window.maplibregl) return;
   maplibregl.setRTLTextPlugin('https://unpkg.com/@mapbox/mapbox-gl-rtl-text@0.2.3/mapbox-gl-rtl-text.js', true);
 
-  // Open on the spots, so the first tiles fetched are the ones shown.
-  var view = { center: [35.0, 32.75], zoom: 8 };
-  if ((cfg.spots || []).length > 1) {
-    var b0 = new maplibregl.LngLatBounds();
-    cfg.spots.forEach(function (s) { b0.extend([s.lon, s.lat]); });
-    view = { bounds: b0, fitBoundsOptions: { padding: { top: 140, bottom: 60, left: 60, right: 60 }, maxZoom: 10 } };
-  }
+  // Opens on the northern Israeli spots, Betzet to Sdot Yam and the Kinneret;
+  // the rest of the world's spots are a zoom out away.
+  var view = {
+    bounds: [[34.8815, 32.4732], [35.575, 33.078]],
+    fitBoundsOptions: { padding: { top: 140, bottom: 60, left: 60, right: 60 }, maxZoom: 10 }
+  };
   var map = new maplibregl.Map(Object.assign({
     container: 'liveMap',
     style: 'https://tiles.openfreemap.org/styles/' + (dark ? 'dark' : 'positron'),
-    minZoom: 5,
+    minZoom: 0,
     maxZoom: 14,
     attributionControl: { compact: true },
     dragRotate: false,
@@ -59,7 +58,7 @@
   });
 
   // —— Readings ——
-  function ageMin(s) { return (Date.now() - new Date(s.at).getTime()) / 60000; }
+  function ageMin(s) { return s.at ? (Date.now() - new Date(s.at).getTime()) / 60000 : Infinity; }
   function freshness(s) {
     var a = ageMin(s);
     return a <= FRESH_MIN ? 'fresh' : a <= LIVE_MIN ? 'late' : 'old';
@@ -84,12 +83,16 @@
 
   function popupHTML(s) {
     var dir = s.dir >= 0 ? compass(s.dir) + ' ' + s.dir + '°' : '';
-    return '<div class="lm-pop"><b>' + esc(s.name) + '</b>' +
-      '<span class="big">' + s.wind + '–' + s.gust + '</span> kt' +
-      '<div class="meta">' + (dir ? dir + ' · ' : '') + clock(s) + ' (' + agoText(s) + ')</div>' +
+    var reading = s.at
+      ? '<span class="big">' + s.wind + '–' + s.gust + '</span> kt' +
+        '<div class="meta">' + (dir ? dir + ' · ' : '') + clock(s) + ' (' + agoText(s) + ')</div>'
+      : '<div class="meta">' + t('livemap.no_reading') + '</div>';
+    return '<div class="lm-pop"><b>' + esc(s.name) + '</b>' + reading +
       '<a href="/">' + t('livemap.table') + '</a>' +
-      '<a href="/forecast?spot=' + encodeURIComponent(s.id) + '">' + t('livemap.forecast') + '</a></div>';
+      '<a href="/forecast?spot=' + encodeURIComponent(s.id) + '">' + t('livemap.forecast') + '</a>' +
+      (s.camera ? '<a href="' + esc(s.camera) + '">' + t('livemap.camera') + '</a>' : '') + '</div>';
   }
+  function pinName(s) { return s.name + (s.at ? ' ' + s.wind + '–' + s.gust + ' kt' : ''); }
 
   function pinElement(s) {
     var el = document.createElement('div');
@@ -99,9 +102,10 @@
     el.setAttribute('role', 'button');
     el.setAttribute('tabindex', '0');
     var arrow = s.dir >= 0 ? '<i class="wind_arrow" style="--dir:' + (s.dir + 180) + 'deg" aria-hidden="true"></i>' : '';
+    var reading = s.at ? '<i class="lm-dot ' + fr + '"></i>' + arrow +
+      '<strong>' + s.wind + '</strong><small>–' + s.gust + '</small>' : '<small>–</small>';
     el.innerHTML = '<span class="lm-point"></span>' +
-      '<span class="lm-label ' + esc(s.level) + '"><i class="lm-dot ' + fr + '"></i>' + arrow +
-      '<strong>' + s.wind + '</strong><small>–' + s.gust + '</small>' +
+      '<span class="lm-label ' + esc(s.level || 'lm-none') + '">' + reading +
       '<span class="lm-name">' + esc(s.name) + '</span></span>';
     var open = function (e) {
       e.stopPropagation();
@@ -117,7 +121,7 @@
     pins = spots.map(function (s) {
       var el = pinElement(s);
       var marker = new maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat([s.lon, s.lat]).addTo(map);
-      el.setAttribute('aria-label', s.name + ' ' + s.wind + '–' + s.gust + ' kt'); // Marker sets "Map marker"
+      el.setAttribute('aria-label', pinName(s)); // Marker sets "Map marker"
       return { spot: s, el: el, marker: marker };
     });
     placeLabels();
@@ -125,7 +129,8 @@
 
   // Each label goes on the first side (top, right, left, bottom) that does not
   // cover a label already placed, fresher readings first; KY and KH sit 2.5 km
-  // apart and would stack otherwise.
+  // apart and would stack otherwise. A label with no clear side is hidden,
+  // leaving its dot (zoomed out, the Israeli spots all share a few pixels).
   function placeLabels() {
     var order = pins.slice().sort(function (a, b) { return ageMin(a.spot) - ageMin(b.spot); });
     var placed = [];
@@ -141,15 +146,16 @@
         var r = label.getBoundingClientRect();
         if (!overlaps(r)) chosen = r;
       }
-      if (!chosen) { p.el.dataset.side = 'top'; chosen = label.getBoundingClientRect(); }
+      if (!chosen) { p.el.dataset.side = 'none'; return; }
       placed.push(chosen);
     });
   }
 
   var updated = document.getElementById('lmUpdated');
   function showUpdated(spots) {
-    if (!spots.length) { updated.textContent = t('livemap.no_data'); return; }
-    var newest = spots.reduce(function (a, b) { return new Date(a.at) > new Date(b.at) ? a : b; });
+    var read = spots.filter(function (s) { return s.at; });
+    if (!read.length) { updated.textContent = t('livemap.no_data'); return; }
+    var newest = read.reduce(function (a, b) { return new Date(a.at) > new Date(b.at) ? a : b; });
     updated.textContent = fmt('livemap.updated', clock(newest) + ' (' + agoText(newest) + ')');
   }
 
@@ -224,7 +230,7 @@
 
   function buildField() {
     resizeCanvas();
-    var live = spots.filter(function (s) { return s.dir >= 0 && ageMin(s) <= LIVE_MIN; });
+    var live = spots.filter(function (s) { return s.at && s.dir >= 0 && ageMin(s) <= LIVE_MIN; });
     if (!live.length) { field = null; clear(); return; }
     var w = box.clientWidth, h = box.clientHeight;
     var cols = Math.ceil(w / CELL) + 1, rows = Math.ceil(h / CELL) + 1;
