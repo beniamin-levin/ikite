@@ -168,6 +168,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/wind/table", s.handleWindTableAPI)
 	mux.HandleFunc("GET /api/windometer/live", s.handleWindometerLiveAPI)
 	mux.HandleFunc("GET /camera", s.handleCamera)
+	mux.HandleFunc("GET /map", s.handleLiveMap)
+	mux.HandleFunc("GET /api/map/live", s.handleLiveMapAPI)
 	mux.HandleFunc("GET /prediction", s.handlePrediction)
 	mux.HandleFunc("GET /api/prediction", s.handlePredictionAPI)
 	mux.HandleFunc("GET /forecast", s.handleForecast)

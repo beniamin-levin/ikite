@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="{{lang}}" dir="{{dir}}" data-theme="{{theme}}">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{{T "title.live_map"}}</title>
+  {{template "head_common" .}}
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.js"></script>
+  <style>
+    body { overflow: hidden; }
+    .livemap-main { position: relative; height: calc(100dvh - var(--nav-h)); }
+    #liveMap { position: absolute; inset: 0; background: var(--bg, #0b1d2b); }
+    .lm-card {
+      position: absolute; top: 12px; inset-inline-start: 12px; z-index: 3;
+      max-width: min(320px, calc(100% - 24px));
+      padding: 10px 12px; border-radius: 12px;
+      background: var(--card-bg); border: 1px solid var(--line); box-shadow: var(--shadow);
+      color: var(--text); font-size: 0.8rem;
+    }
+    .lm-card h1 { margin: 0 0 2px; font-size: 1rem; }
+    .lm-card p { margin: 0 0 6px; color: var(--muted); }
+    .lm-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+    .lm-legend span { padding: 1px 6px; border-radius: 6px; font-size: 0.7rem; color: var(--text); }
+    .lm-toggle {
+      margin-inline-start: auto; padding: 3px 8px; border-radius: 8px; cursor: pointer;
+      border: 1px solid var(--line); background: transparent; color: var(--text); font: inherit; font-size: 0.75rem;
+    }
+    .lm-toggle[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .lm-fresh { display: inline-flex; gap: 4px; align-items: center; color: var(--muted); font-size: 0.7rem; }
+    .lm-collapse { display: none; }
+
+    #liveParticles { position: absolute; left: 0; top: 0; pointer-events: none; }
+
+    /* A pin is a dot on the meter with a label beside it; the label moves to
+       whichever side is clear of the other labels (data-side). */
+    .lm-pin { width: 0; height: 0; cursor: pointer; }
+    .lm-pin .lm-point {
+      position: absolute; left: -5px; top: -5px; width: 10px; height: 10px; border-radius: 50%;
+      background: var(--text); border: 2px solid var(--bg, #061522); box-sizing: border-box;
+    }
+    .lm-pin .lm-label {
+      position: absolute; display: flex; align-items: center; gap: 4px; white-space: nowrap;
+      padding: 3px 8px 3px 6px; border-radius: 999px;
+      border: 1px solid var(--line); box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+      color: var(--text); font-size: 0.8rem; line-height: 1.1;
+      direction: ltr; /* "4–5 Kiryat Haim" in both languages; the spot names are English */
+    }
+    .lm-pin[data-side="top"] .lm-label { left: 0; bottom: 9px; transform: translateX(-50%); }
+    .lm-pin[data-side="bottom"] .lm-label { left: 0; top: 9px; transform: translateX(-50%); }
+    .lm-pin[data-side="right"] .lm-label { left: 9px; top: 0; transform: translateY(-50%); }
+    .lm-pin[data-side="left"] .lm-label { right: 9px; top: 0; transform: translateY(-50%); }
+    .lm-label strong { font-size: 0.95rem; }
+    .lm-label small { color: var(--text); opacity: 0.75; }
+    .lm-label .lm-name { font-size: 0.68rem; opacity: 0.85; max-width: 7.5rem; overflow: hidden; text-overflow: ellipsis; }
+    .lm-dot { width: 7px; height: 7px; border-radius: 50%; flex: 0 0 auto; }
+    .lm-dot.fresh { background: #2fd27a; }
+    .lm-dot.late { background: #f5a524; }
+    .lm-dot.old { background: #8a99a6; }
+    .lm-pin.is-old .lm-label { opacity: 0.6; filter: saturate(0.4); }
+    .lm-label .wind_arrow { width: 13px; height: 13px; }
+
+    .maplibregl-popup-content {
+      background: var(--pop-bg, var(--card-bg)); color: var(--text);
+      border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: 0.82rem;
+    }
+    .maplibregl-popup-tip { display: none; }
+    .maplibregl-popup-close-button { color: var(--muted); font-size: 1.1rem; }
+    .lm-pop b { display: block; margin-bottom: 4px; font-size: 0.9rem; }
+    .lm-pop .big { font-size: 1.3rem; font-weight: 700; }
+    .lm-pop .meta { color: var(--muted); margin: 2px 0 6px; }
+    .lm-pop a { margin-inline-end: 10px; }
+
+    @media only screen and (max-width: 700px) {
+      .lm-card { top: 8px; inset-inline-start: 8px; padding: 8px 10px; }
+      .lm-card p.lm-note { display: none; }
+      .lm-label .lm-name { display: none; }
+    }
+  </style>
+</head>
+<body>
+  {{template "nav" .}}
+  <main class="livemap-main" id="liveMain">
+    <div id="liveMap" role="region" aria-label="{{T "livemap.heading"}}"></div>
+    <section class="lm-card">
+      <h1>{{T "livemap.heading"}}</h1>
+      <p class="lm-note">{{T "livemap.note"}}</p>
+      <p id="lmUpdated"></p>
+      <div class="lm-row lm-legend">
+        <span class="level0">&lt;6</span><span class="level1">6–10</span><span class="level2">10–14</span><span class="level3">14–18</span><span class="level4">18+</span>
+        <button type="button" class="lm-toggle" id="lmParticles" aria-pressed="true">{{T "livemap.particles"}}</button>
+      </div>
+      <div class="lm-row" style="margin-top:6px">
+        <span class="lm-fresh"><i class="lm-dot fresh"></i>{{T "livemap.legend_fresh"}}</span>
+        <span class="lm-fresh"><i class="lm-dot late"></i>{{T "livemap.legend_late"}}</span>
+        <span class="lm-fresh"><i class="lm-dot old"></i>{{T "livemap.legend_old"}}</span>
+      </div>
+    </section>
+  </main>
+  <script>
+    window.LIVE_MAP = {
+      spots: {{.SpotsJSON}},
+      theme: {{theme}},
+      lang: {{lang}}
+    };
+  </script>
+  <script src="/static/livemap.js?v=7"></script>
+</body>
+</html>
