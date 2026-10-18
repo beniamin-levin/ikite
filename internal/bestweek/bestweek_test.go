@@ -47,7 +47,7 @@ func TestPlanPicksLongestRunAndAveragesKYKH(t *testing.T) {
 		t.Fatalf("kiteable/empty day wrong")
 	}
 	msg := Message(days, "https://ikite.fyi/best")
-	if !strings.Contains(msg, "Kiryat Yam / Haim 13–17, 13 kt") || !strings.Contains(msg, "10–12 m") {
+	if !strings.Contains(msg, "Thu 15/10 · Kiryat Yam / Haim · 13–18 kt") || strings.Contains(msg, "Fri 16/10") {
 		t.Fatalf("message:\n%s", msg)
 	}
 }

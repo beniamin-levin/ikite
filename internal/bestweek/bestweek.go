@@ -303,11 +303,12 @@ func mean(hs []Hour) float64 {
 	return s / float64(len(hs))
 }
 
-// Message is the Telegram summary. siteURL is linked at the bottom.
+// Message is the Telegram summary: one line per day with the best spot and
+// its mean wind and top gust over the kiteable window. siteURL, linked at the
+// bottom, has the hours, direction and kite size.
 func Message(days []Day, siteURL string) string {
 	var b strings.Builder
-	b.WriteString("🪁 ikite — best kite days (ikite estimate)\n")
-	any := false
+	b.WriteString("🪁 ikite — best kite days\n")
 	for _, d := range days {
 		best := d.Best()
 		if best == nil {
@@ -315,31 +316,10 @@ func Message(days []Day, siteURL string) string {
 		}
 		label := d.Date.Format("Mon 02/01")
 		if !d.Kiteable() {
-			fmt.Fprintf(&b, "\n%s: nothing kiteable (best %s, up to %.0f kt)", label, best.Group.Name, best.Peak.Wind)
+			fmt.Fprintf(&b, "\n%s · nothing kiteable", label)
 			continue
 		}
-		any = true
-		fmt.Fprintf(&b, "\n%s: %s %s, %.0f kt", label, best.Group.Name, best.Window(), best.Mean)
-		fmt.Fprintf(&b, " (up to %.0f, gust %.0f)", best.Peak.Wind, best.Peak.Gust)
-		if c := Compass(best.Peak.Dir); c != "" {
-			b.WriteString(" " + c)
-		}
-		b.WriteString(" — " + KiteSize(best.Mean))
-		if best.Gusty() {
-			b.WriteString(", gusty")
-		}
-		var also []string
-		for _, o := range d.Spots[1:] {
-			if o.RunHours >= 2 {
-				also = append(also, fmt.Sprintf("%s %s", o.Group.Name, o.Window()))
-			}
-		}
-		if len(also) > 0 {
-			b.WriteString("\n    also " + strings.Join(also, ", "))
-		}
-	}
-	if !any {
-		b.WriteString("\n\nNo day with two kiteable hours (12+ kt) in the forecast.")
+		fmt.Fprintf(&b, "\n%s · %s · %.0f–%.0f kt", label, best.Group.Name, best.Mean, best.MaxGust)
 	}
 	if siteURL != "" {
 		b.WriteString("\n\n" + siteURL)
