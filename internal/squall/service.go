@@ -175,7 +175,7 @@ func (s *Service) radarStep(now time.Time, p Params) error {
 	if recent, err := s.sentSince("radar", now.Add(-cooldown)); err != nil || recent {
 		return err
 	}
-	msg := radarMessage(newestScan, eta, now, s.Target) + s.imsThunderNote(now)
+	msg := radarMessage(newestScan, eta, now, s.Target, s.upwindReporting(now)) + s.imsThunderNote(now)
 	frameAt := newest.FrameAt
 	return s.send("radar", now, &frameAt, &eta, msg)
 }
@@ -197,7 +197,34 @@ func frameRow(at, now time.Time, path, rel string, sc Scan) store.SquallFrame {
 	return f
 }
 
-func radarMessage(sc Scan, eta float64, now time.Time, t Target) string {
+// upwindReporting reports whether Bat Galim or Shavei Tzion has sent a reading
+// in the last 15 minutes. They are collected 08:00–22:00, so a dawn squall
+// (2026-10-18, 06:48) gets no gust-front alert and the radar alert must not
+// promise one.
+func (s *Service) upwindReporting(now time.Time) bool {
+	var locs []string
+	for _, u := range Upwind {
+		locs = append(locs, u.Loc)
+	}
+	rows, err := s.Store.ListWindLocationsRange(locs, now.Add(-15*time.Minute), now)
+	return err == nil && len(rows) > 0
+}
+
+// rainWord names radar reflectivity the way the alert reads it: 36 dBZ is
+// moderate rain, not heavy.
+func rainWord(dbz int) string {
+	switch {
+	case dbz >= 50:
+		return "Very heavy rain, possibly hail"
+	case dbz >= 40:
+		return "Heavy rain"
+	case dbz >= 30:
+		return "Moderate rain"
+	}
+	return "Light rain"
+}
+
+func radarMessage(sc Scan, eta float64, now time.Time, t Target, upwindLive bool) string {
 	c := sc.Threat
 	arrive := now.Add(time.Duration(math.Max(eta, 0) * float64(time.Minute)))
 	var b strings.Builder
@@ -207,11 +234,15 @@ func radarMessage(sc Scan, eta float64, now time.Time, t Target) string {
 	} else {
 		fmt.Fprintf(&b, "Expected in ~%.0f min (around %s).\n", eta, arrive.Format("15:04"))
 	}
-	fmt.Fprintf(&b, "Heavy rain (%d dBZ) %.0f km %s", c.MaxDBZ, c.DistKm, compass(c.BearingDeg))
+	fmt.Fprintf(&b, "%s (%d dBZ) %.0f km %s", rainWord(c.MaxDBZ), c.MaxDBZ, c.DistKm, compass(c.BearingDeg))
 	if sc.Motion.OK {
 		fmt.Fprintf(&b, ", moving %s at %.0f km/h", toward(sc.Motion.HeadingDeg), sc.Motion.SpeedKmh)
 	}
-	b.WriteString(".\nA second alert follows when Bat Galim or Shavei Tzion feels the gust front.\n")
+	if upwindLive {
+		b.WriteString(".\nA second alert follows when Bat Galim or Shavei Tzion feels the gust front.\n")
+	} else {
+		b.WriteString(".\nBat Galim and Shavei Tzion are not reporting now, so no gust-front alert follows. Watch the radar.\n")
+	}
 	b.WriteString("Radar (RainViewer): " + radarMapURL)
 	return b.String()
 }

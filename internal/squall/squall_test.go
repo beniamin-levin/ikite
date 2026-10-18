@@ -6,6 +6,7 @@ import (
 	"image/color"
 	"image/png"
 	"math"
+	"strings"
 	"testing"
 	"time"
 
@@ -315,5 +316,24 @@ func TestCompass(t *testing.T) {
 		if got := compass(deg); got != want {
 			t.Fatalf("compass(%v) = %s, want %s", deg, got, want)
 		}
+	}
+}
+
+func TestRadarMessageWording(t *testing.T) {
+	sc := Scan{Threat: &Cell{MaxDBZ: 36, DistKm: 11, BearingDeg: 315}}
+	now := time.Date(2026, 10, 18, 6, 20, 0, 0, time.UTC)
+	tgt := Target{Name: "Kiryat Haim"}
+	dawn := radarMessage(sc, 28, now, tgt, false)
+	if !strings.Contains(dawn, "Moderate rain (36 dBZ) 11 km NW") || strings.Contains(dawn, "Heavy rain") {
+		t.Fatalf("rain wording:\n%s", dawn)
+	}
+	if strings.Contains(dawn, "second alert") || !strings.Contains(dawn, "not reporting now") {
+		t.Fatalf("dawn alert must not promise a second alert:\n%s", dawn)
+	}
+	if day := radarMessage(sc, 28, now, tgt, true); !strings.Contains(day, "A second alert follows") {
+		t.Fatalf("daytime alert:\n%s", day)
+	}
+	if rainWord(52) != "Very heavy rain, possibly hail" || rainWord(44) != "Heavy rain" || rainWord(25) != "Light rain" {
+		t.Fatal("rain words")
 	}
 }
