@@ -34,11 +34,15 @@ func (s *Store) InsertWind(r models.WindReading) error {
 	return err
 }
 
+// InsertWindLog keeps one raw payload per location and period: a reading
+// fetched again (the IMS collector re-reads a 3-hour window every run) replaces
+// the stored payload, as InsertWind replaces the reading.
 func (s *Store) InsertWindLog(period time.Time, location, raw string) error {
 	// Legacy schema uses column name `log` (not `raw`).
 	_, err := s.DB.Exec(`
-		INSERT IGNORE INTO wind_data_log (period, location, log)
-		VALUES (?, ?, ?)`, period, location, raw)
+		INSERT INTO wind_data_log (period, location, log)
+		VALUES (?, ?, ?)
+		ON DUPLICATE KEY UPDATE log = VALUES(log)`, period, location, raw)
 	return err
 }
 
