@@ -6,7 +6,7 @@
       {{range .Headers}}
       <th data-spot="{{.Key}}"{{if .IsIMS}} data-ims-of="{{.IMSOf}}"{{end}}{{if or .CSS .IsIMS}} class="{{.CSS}}{{if .IsIMS}} ims-col{{end}}"{{end}}>
         {{if .WindguruURL}}<a class="th-spot-link" href="{{.WindguruURL}}" target="_blank" rel="noopener" title="Windguru">{{end}}
-        <span class="th-full">{{if .IsIMS}}{{.Name}}{{else}}{{boldKY .Name .Key}}{{end}}</span>
+        <span class="th-full">{{if .IsIMS}}{{.Name}}{{else}}{{boldKY .Name .Key}}{{end}}{{if .Est}} <small class="est-tag" title="{{T "table.est_title"}}">{{T "table.est"}}</small>{{end}}</span>
         <span class="th-short" aria-hidden="true">{{if eq .Key "ky"}}KY{{else}}{{shortSpot .Key .Name}}{{end}}</span>
         {{if .WindguruURL}}</a>{{end}}
       </th>

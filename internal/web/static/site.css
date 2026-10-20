@@ -607,3 +607,7 @@ html[data-theme="light"] {
   --cam-stage: #d9e3ec;
   --cam-bar: #e8eef4;
 }
+
+/* Meterless spot (Beit Yanai): the ikite estimate, not a reading */
+#windTable td.est-cell .speed { font-style: italic; font-weight: 500; opacity: 0.8; }
+#windTable .est-tag { font-size: 0.7em; font-weight: 500; opacity: 0.75; }

@@ -227,6 +227,7 @@ type indexColSpec struct {
 	Loc    string
 	IsIMS  bool
 	Parent string
+	Est    bool // a meterless spot: its cells are the ikite estimate, not readings
 }
 
 type locHeader struct {
@@ -237,6 +238,7 @@ type locHeader struct {
 	IsIMS       bool
 	IMSOf       string // parent spot key when IsIMS
 	WindguruURL string // https://www.windguru.cz/{station|spot id}; empty if none
+	Est         bool   // the column is the ikite estimate (no meter there)
 }
 
 // windguruSpotURL returns the Windguru station page for a spot.
@@ -371,6 +373,45 @@ func indexBucketKey(t time.Time, tz *time.Location, spec indexPeriodSpec) string
 		t = t.Truncate(spec.Bucket)
 	}
 	return t.Format(spec.DateFmt)
+}
+
+// fillEstimateColumns gives each meterless spot (Beit Yanai) a reading in every
+// table row: the ikite estimate for that hour, the hourly nowcast where there
+// is one. The column is marked as an estimate (locHeader.Est, "est-cell").
+func (s *Server) fillEstimateColumns(spots []models.Spot, grouped map[string]map[string][]models.WindReading,
+	rowAt map[string]time.Time, from, to time.Time) {
+	for _, sp := range spots {
+		if models.CalibrationMeter[sp.ID] == "" {
+			continue
+		}
+		est, err := s.Store.ListWindEstimate(sp.ID, from.Truncate(time.Hour), to)
+		if err != nil {
+			s.Log.Warn("table estimate", "spot", sp.ID, "err", err)
+			continue
+		}
+		nc, err := s.Store.ListWindNowcast(sp.ID, from.Truncate(time.Hour), to)
+		if err != nil {
+			s.Log.Warn("table nowcast", "spot", sp.ID, "err", err)
+		}
+		byHour := map[string]models.WindEstimate{}
+		for _, rows := range [][]models.WindEstimate{est, nc} {
+			for _, e := range rows {
+				byHour[e.Period.Format("2006-01-02 15")] = e
+			}
+		}
+		for fk, at := range rowAt {
+			e, ok := byHour[at.In(s.Cfg.Timezone).Format("2006-01-02 15")]
+			if !ok {
+				continue
+			}
+			dir := e.Dir
+			if dir < 0 {
+				dir = 0
+			}
+			grouped[fk][sp.ID] = []models.WindReading{{Period: at, Location: sp.ID,
+				Wind: e.Wind, Gust: e.Gust, WindDir: dir}}
+		}
+	}
 }
 
 // imsColumnSpots get a dedicated IMS column next to them in the live table.
@@ -542,6 +583,7 @@ func (s *Server) buildIndexTableView(period string, now time.Time) (*indexTableV
 	grouped := map[string]map[string][]models.WindReading{}
 	var orderKeys []string
 	seen := map[string]bool{}
+	rowAt := map[string]time.Time{}
 	var latestPeriod time.Time
 	for _, rd := range readings {
 		if rd.Period.After(latestPeriod) {
@@ -555,6 +597,7 @@ func (s *Server) buildIndexTableView(period string, now time.Time) (*indexTableV
 		if !seen[fk] {
 			seen[fk] = true
 			orderKeys = append(orderKeys, fk)
+			rowAt[fk] = at
 		}
 		if grouped[fk] == nil {
 			grouped[fk] = map[string][]models.WindReading{}
@@ -562,9 +605,12 @@ func (s *Server) buildIndexTableView(period string, now time.Time) (*indexTableV
 		grouped[fk][rd.Location] = append(grouped[fk][rd.Location], rd)
 	}
 
+	s.fillEstimateColumns(collectSpots, grouped, rowAt, from, to)
+
 	cols := make([]indexColSpec, 0, len(order)+2)
 	for _, loc := range order {
-		cols = append(cols, indexColSpec{Key: loc, Name: titles[loc], Loc: loc})
+		cols = append(cols, indexColSpec{Key: loc, Name: titles[loc], Loc: loc,
+			Est: models.CalibrationMeter[loc] != ""})
 		if imsColumnSpots[loc] && imsLocBySpot[loc] != "" {
 			cols = append(cols, indexColSpec{
 				Key: loc + "-ims", Name: imsColumnName(loc, imsLocBySpot[loc]), Loc: imsLocBySpot[loc],
@@ -583,7 +629,7 @@ func (s *Server) buildIndexTableView(period string, now time.Time) (*indexTableV
 
 	headers := make([]locHeader, 0, len(cols))
 	for _, col := range cols {
-		h := locHeader{Key: col.Key, Name: col.Name, IsIMS: col.IsIMS, IMSOf: col.Parent}
+		h := locHeader{Key: col.Key, Name: col.Name, IsIMS: col.IsIMS, IMSOf: col.Parent, Est: col.Est}
 		if !col.IsIMS {
 			h.WindguruURL = wgURLBySpot[col.Key]
 		}
@@ -607,7 +653,12 @@ func (s *Server) buildIndexTableView(period string, now time.Time) (*indexTableV
 	for _, fk := range orderKeys {
 		row := rowData{Time: fk, Cells: make([]cellData, 0, len(cols))}
 		for _, col := range cols {
-			row.Cells = append(row.Cells, aggregateIndexCell(grouped[fk][col.Loc], s.Cfg.Timezone, spec.MaxSamples))
+			cell := aggregateIndexCell(grouped[fk][col.Loc], s.Cfg.Timezone, spec.MaxSamples)
+			if col.Est && !cell.Empty {
+				cell.CSS += " est-cell"
+				cell.Samples = nil
+			}
+			row.Cells = append(row.Cells, cell)
 		}
 		// Prefer rows with first-page (DB visible) data so the default table
 		// does not paint sparse off-page minutes that JS later hides (CLS).
