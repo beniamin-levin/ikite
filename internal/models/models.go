@@ -54,6 +54,13 @@ type Spot struct {
 	CollectEndHour     int
 }
 
+// CalibrationMeter names, for a spot without a meter of its own, the nearby
+// spot whose meter and forecast history calibrate it. Such a spot has a
+// forecast and an estimate but never a live reading.
+var CalibrationMeter = map[string]string{
+	"by": "hp", // Beit Yanai: Hadera Port, 10 km up the same straight coast
+}
+
 // SecondaryMeters maps a spot that only carries an extra meter to the spot it
 // serves. Its readings are shown in that spot's cells, so a cell takes the
 // lower wind and the higher gust of both meters. It has no column, forecast or

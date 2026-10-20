@@ -523,6 +523,22 @@ func (s *Server) buildIndexTableView(period string, now time.Time) (*indexTableV
 		return nil, err
 	}
 
+	// Spots off the default page are collected on staggered minutes (Sdot Yam
+	// at :01, :06…) to spread the Windguru load. In the per-minute view their
+	// readings join the 5-minute row of the shown spots, or a spot ticked in
+	// the prefs would sit alone in rows the table drops and never show.
+	staggered := map[string]bool{}
+	for _, sp := range collectSpots {
+		if !sp.Visible {
+			staggered[sp.ID] = true
+		}
+	}
+	for loc, parent := range models.SecondaryMeters {
+		if staggered[parent] {
+			staggered[loc] = true
+		}
+	}
+
 	grouped := map[string]map[string][]models.WindReading{}
 	var orderKeys []string
 	seen := map[string]bool{}
@@ -531,7 +547,11 @@ func (s *Server) buildIndexTableView(period string, now time.Time) (*indexTableV
 		if rd.Period.After(latestPeriod) {
 			latestPeriod = rd.Period
 		}
-		fk := indexBucketKey(rd.Period, s.Cfg.Timezone, spec)
+		at := rd.Period
+		if staggered[rd.Location] && spec.Bucket <= time.Minute {
+			at = at.Truncate(models.VisibleCollectGridMin * time.Minute)
+		}
+		fk := indexBucketKey(at, s.Cfg.Timezone, spec)
 		if !seen[fk] {
 			seen[fk] = true
 			orderKeys = append(orderKeys, fk)
@@ -1378,11 +1398,15 @@ func (s *Server) handleCollectSpotsAPI(w http.ResponseWriter, r *http.Request) {
 		Key     string `json:"key"`
 		Name    string `json:"name"`
 		Display bool   `json:"display"`
+		// NoMeter: a forecast-only spot, shown on the forecast pages but never
+		// as a live table column.
+		NoMeter bool `json:"no_meter,omitempty"`
 	}
 	layout := collectLayoutSpots(spots)
 	out := make([]spotOut, 0, len(layout))
 	for _, sp := range layout {
-		out = append(out, spotOut{Key: sp.Key, Name: sp.Name, Display: sp.Display})
+		out = append(out, spotOut{Key: sp.Key, Name: sp.Name, Display: sp.Display,
+			NoMeter: models.CalibrationMeter[sp.Key] != ""})
 	}
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(map[string]any{"spots": out}); err != nil {

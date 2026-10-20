@@ -275,6 +275,7 @@ var enMessages = map[string]string{
 	"prefs.save":                 "Save preferences",
 	"prefs.drag":                 "Drag to reorder",
 	"prefs.show_table":           "Show on wind table",
+	"prefs.forecast_only":        "forecast only, no meter",
 	"prefs.move_up":              "Move up",
 	"prefs.move_down":            "Move down",
 	"prefs.forecast_heading":     "Forecast",
@@ -592,6 +593,7 @@ var heMessages = map[string]string{
 	"prefs.save":                 "שמור העדפות",
 	"prefs.drag":                 "גרור לשינוי סדר",
 	"prefs.show_table":           "הצג בטבלת רוח",
+	"prefs.forecast_only":        "תחזית בלבד, אין מד",
 	"prefs.move_up":              "הזז למעלה",
 	"prefs.move_down":            "הזז למטה",
 	"prefs.forecast_heading":     "תחזית",
@@ -650,7 +652,7 @@ var heMessages = map[string]string{
 func clientMessages(lang string) map[string]string {
 	keys := []string{
 		"common.saved", "common.saving", "common.save_failed",
-		"prefs.drag", "prefs.show_table", "prefs.move_up", "prefs.move_down",
+		"prefs.drag", "prefs.show_table", "prefs.forecast_only", "prefs.move_up", "prefs.move_down",
 		"prefs.notifications", "prefs.off", "prefs.on",
 		"prefs.threshold", "prefs.interval",
 		"prefs.label", "prefs.left", "prefs.center", "prefs.right", "prefs.none",

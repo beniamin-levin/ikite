@@ -77,12 +77,9 @@ func (s *EstimateService) Run(now time.Time, backfillDays int) error {
 	return nil
 }
 
-// calibrationMeter names, for a spot without a meter of its own, the nearby
-// spot whose meter and forecast history calibrate it. The models' bias there
-// is applied to the spot's own forecasts.
-var calibrationMeter = map[string]string{
-	"by": "hp", // Beit Yanai: Hadera Port, 10 km up the same straight coast
-}
+// calibrationMeter: the models' bias at the calibrating spot is applied to
+// the meterless spot's own forecasts.
+var calibrationMeter = models.CalibrationMeter
 
 // runSpot returns the number of hours estimated for today-and-forward.
 func (s *EstimateService) runSpot(spot string, today, now time.Time, backfillDays int) (int, error) {

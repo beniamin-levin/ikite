@@ -356,7 +356,8 @@
           var checked = visible[key] !== false;
           tr.innerHTML =
             '<td class="drag-handle center" title="' + escapeHtml(t('prefs.drag')) + '">⋮⋮</td>' +
-            '<td>' + escapeHtml(sp.name) + ' <small>(' + escapeHtml(key) + ')</small></td>' +
+            '<td>' + escapeHtml(sp.name) + ' <small>(' + escapeHtml(key) + ')' +
+            (sp.no_meter ? ' · ' + escapeHtml(t('prefs.forecast_only')) : '') + '</small></td>' +
             '<td class="center"><input type="checkbox" class="spot-display" data-key="' + escapeHtml(key) + '"' +
             (checked ? ' checked' : '') + ' title="' + escapeHtml(t('prefs.show_table')) + '" /></td>' +
             '<td class="center">' +
